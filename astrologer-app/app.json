@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "AstroConnect Partner",
+    "slug": "astroconnect-partner",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#7C2D12"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.astroconnect.partner"
+    },
+    "android": {
+      "package": "com.astroconnect.partner",
+      "adaptiveIcon": {
+        "backgroundColor": "#7C2D12"
+      }
+    }
+  }
+}

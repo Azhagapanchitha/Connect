@@ -1,0 +1,63 @@
+import React, { useState } from 'react';
+import { Alert, ScrollView, Text, View } from 'react-native';
+import { useAuth } from '../AuthContext';
+import { Button, Chip, Input, SectionTitle } from '../components/ui';
+import { colors } from '../theme';
+
+const SKILLS = ['Vedic', 'Kundli', 'Tarot', 'Numerology', 'Vastu', 'Palmistry', 'KP System', 'Psychic', 'Love', 'Career', 'Finance', 'Health', 'Remedies', 'Relationships'];
+const LANGUAGES = ['English', 'Hindi', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Marathi', 'Bengali', 'Gujarati', 'Punjabi'];
+
+const toggle = (list, item) => (list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
+
+// Used for onboarding and for editing the public profile customers see.
+export default function ProfileSetupScreen({ navigation }) {
+  const { user, updateProfile } = useAuth();
+  const [name, setName] = useState(user.name || '');
+  const [bio, setBio] = useState(user.bio || '');
+  const [skills, setSkills] = useState(user.skills || []);
+  const [languages, setLanguages] = useState(user.languages || []);
+  const [experienceYears, setExp] = useState(String(user.experienceYears || ''));
+  const [ratePerMin, setRate] = useState(String(user.ratePerMin || 20));
+  const [busy, setBusy] = useState(false);
+
+  async function save() {
+    if (!name.trim()) return Alert.alert('Please enter your display name');
+    if (!skills.length) return Alert.alert('Pick at least one expertise');
+    if (!languages.length) return Alert.alert('Pick at least one language');
+    setBusy(true);
+    try {
+      await updateProfile({ name, bio, skills, languages, experienceYears: Number(experienceYears) || 0, ratePerMin: Number(ratePerMin) });
+      if (navigation.canGoBack()) navigation.goBack();
+    } catch (e) {
+      Alert.alert('Could not save', e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 20, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+      <Text style={{ color: colors.muted, marginBottom: 16 }}>This is your public profile. Customers see it before starting a chat.</Text>
+      <Input label="Display name" value={name} onChangeText={setName} placeholder="e.g. Acharya Vikram Sharma" />
+      <Input label="About you" value={bio} onChangeText={setBio} placeholder="Your approach, specialities, background…" multiline />
+      <SectionTitle>Expertise</SectionTitle>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {SKILLS.map((sk) => <Chip key={sk} label={sk} selected={skills.includes(sk)} onPress={() => setSkills(toggle(skills, sk))} />)}
+      </View>
+      <SectionTitle>Languages</SectionTitle>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+        {LANGUAGES.map((l) => <Chip key={l} label={l} selected={languages.includes(l)} onPress={() => setLanguages(toggle(languages, l))} />)}
+      </View>
+      <View style={{ flexDirection: 'row' }}>
+        <View style={{ flex: 1, marginRight: 8 }}>
+          <Input label="Experience (years)" value={experienceYears} onChangeText={setExp} keyboardType="number-pad" maxLength={2} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 8 }}>
+          <Input label="Rate (₹ per minute)" value={ratePerMin} onChangeText={setRate} keyboardType="number-pad" maxLength={3} />
+        </View>
+      </View>
+      <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 20 }}>You keep 70% of every minute billed. Payouts can be withdrawn from the Earnings tab.</Text>
+      <Button title="Save profile" onPress={save} loading={busy} />
+    </ScrollView>
+  );
+}
