@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
 import { Button, Card, Input } from '../components/ui';
+import ClientPanel from '../components/Jathagam';
 import { colors, money, ROLE, signLabel, STATUS_LABEL } from '../theme';
 
 const isCustomer = ROLE === 'customer';
@@ -19,27 +22,6 @@ function useElapsed(startedAt, running) {
   if (!startedAt) return '00:00';
   const secs = Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000));
   return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
-}
-
-function BirthDetails({ c }) {
-  const [open, setOpen] = useState(true);
-  if (!c) return null;
-  const sg = signLabel(c.sign);
-  return (
-    <Pressable onPress={() => setOpen((o) => !o)} style={s.birth}>
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-        <Text style={{ fontWeight: '700', color: colors.text }}>Client details</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={colors.muted} />
-      </View>
-      {open ? (
-        <Text style={{ color: colors.text, marginTop: 6, lineHeight: 20 }}>
-          {c.name}{c.gender ? ` · ${c.gender}` : ''}{sg ? ` · ${sg.symbol} ${sg.label}` : ''}{'\n'}
-          Born {c.birthDate || '—'} at {c.birthTime || '—'}{'\n'}
-          {c.birthPlace || 'Place not provided'}
-        </Text>
-      ) : null}
-    </Pressable>
-  );
 }
 
 function ReviewForm({ session, onDone }) {
@@ -80,6 +62,8 @@ export default function ChatScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
+  const [showChart, setShowChart] = useState(true);
+  const headerHeight = useHeaderHeight();
   const listRef = useRef(null);
   const typingTimer = useRef(null);
   const lastTypingSent = useRef(0);
@@ -157,7 +141,8 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90} style={{ flex: 1 }}>
+      {/* Android is edge-to-edge on this Expo SDK and no longer resizes for the keyboard, so pad on both platforms. */}
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={headerHeight} style={{ flex: 1 }}>
         <View style={s.bar}>
           <Text style={s.barText}>
             <Text style={{ fontWeight: '700' }}>{STATUS_LABEL[session.status]}</Text>
@@ -169,67 +154,78 @@ export default function ChatScreen({ route, navigation }) {
           </Text>
         </View>
 
-        {!isCustomer ? <BirthDetails c={session.customer} /> : null}
-
-        {session.status === 'requested' ? (
-          <View style={s.center}>
-            {isCustomer ? (
-              <>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={s.centerTitle}>Waiting for {other?.name} to accept…</Text>
-                <Text style={s.centerSub}>Requests expire after 1 minute. You are charged only once the chat starts.</Text>
-              </>
-            ) : (
-              <>
-                <Text style={s.centerTitle}>{other?.name} wants to chat</Text>
-                {session.topic ? <Text style={s.centerSub}>Topic: {session.topic}</Text> : null}
-                <View style={{ flexDirection: 'row', marginTop: 20 }}>
-                  <Button title="Decline" variant="danger" onPress={() => respond('reject')} style={{ marginRight: 12, flex: 1 }} />
-                  <Button title="Accept" icon="checkmark" onPress={() => respond('accept')} style={{ flex: 1 }} />
-                </View>
-              </>
-            )}
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            contentContainerStyle={{ padding: 16 }}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
-            ListEmptyComponent={active ? <Text style={[s.centerSub, { marginTop: 40 }]}>Say hello 👋 The chat is live.</Text> : null}
-            renderItem={({ item }) => {
-              const mine = item.senderId === user.id;
-              return (
-                <View style={[s.bubble, mine ? s.mine : s.theirs]}>
-                  <Text style={{ color: mine ? '#fff' : colors.text, fontSize: 15, lineHeight: 21 }}>{item.text}</Text>
-                  <Text style={{ color: mine ? '#E9E3FF' : colors.muted, fontSize: 10, marginTop: 4, alignSelf: 'flex-end' }}>
-                    {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
-                </View>
-              );
-            }}
-            ListFooterComponent={
-              <>
-                {typing ? <Text style={{ color: colors.muted, fontStyle: 'italic', marginTop: 4 }}>{other?.name} is typing…</Text> : null}
-                {!active ? <EndedSummary session={session} /> : null}
-              </>
-            }
-          />
-        )}
-
-        {!active && isCustomer && session.status === 'ended' && !session.reviewed ? (
-          <ReviewForm session={session} onDone={() => setSession({ ...session, reviewed: true })} />
-        ) : null}
-
-        {active ? (
-          <View style={s.composer}>
-            <TextInput style={s.composerInput} placeholder="Type a message" placeholderTextColor={colors.muted} value={text} onChangeText={onChangeText} multiline />
-            <Pressable onPress={send} style={s.send} disabled={!text.trim()}>
-              <Ionicons name="send" size={20} color="#fff" />
+        {!isCustomer ? (
+          <>
+            {showChart ? <View style={s.half}><ClientPanel sessionId={sessionId} customer={session.customer} /></View> : null}
+            <Pressable onPress={() => setShowChart((v) => !v)} style={s.toggle}>
+              <Text style={s.toggleText}>{showChart ? 'Hide client chart' : 'Show client chart'}</Text>
+              <Ionicons name={showChart ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primaryDark} />
             </Pressable>
-          </View>
+          </>
         ) : null}
+
+        <View style={s.half}>
+          {session.status === 'requested' ? (
+            <View style={s.center}>
+              {isCustomer ? (
+                <>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={s.centerTitle}>Waiting for {other?.name} to accept…</Text>
+                  <Text style={s.centerSub}>Requests expire after 1 minute. You are charged only once the chat starts.</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={s.centerTitle}>{other?.name} wants to chat</Text>
+                  {session.topic ? <Text style={s.centerSub}>Topic: {session.topic}</Text> : null}
+                  <View style={{ flexDirection: 'row', marginTop: 20 }}>
+                    <Button title="Decline" variant="danger" onPress={() => respond('reject')} style={{ marginRight: 12, flex: 1 }} />
+                    <Button title="Accept" icon="checkmark" onPress={() => respond('accept')} style={{ flex: 1 }} />
+                  </View>
+                </>
+              )}
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(m) => m.id}
+              contentContainerStyle={{ padding: 16 }}
+              onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
+              ListEmptyComponent={active ? <Text style={[s.centerSub, { marginTop: 40 }]}>Say hello 👋 The chat is live.</Text> : null}
+              renderItem={({ item }) => {
+                const mine = item.senderId === user.id;
+                return (
+                  <View style={[s.bubble, mine ? s.mine : s.theirs]}>
+                    <Text style={{ color: mine ? '#fff' : colors.text, fontSize: 15, lineHeight: 21 }}>{item.text}</Text>
+                    <Text style={{ color: mine ? '#E9E3FF' : colors.muted, fontSize: 10, marginTop: 4, alignSelf: 'flex-end' }}>
+                      {new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                  </View>
+                );
+              }}
+              ListFooterComponent={
+                <>
+                  {typing ? <Text style={{ color: colors.muted, fontStyle: 'italic', marginTop: 4 }}>{other?.name} is typing…</Text> : null}
+                  {!active ? <EndedSummary session={session} /> : null}
+                </>
+              }
+            />
+          )}
+
+          {!active && isCustomer && session.status === 'ended' && !session.reviewed ? (
+            <ReviewForm session={session} onDone={() => setSession({ ...session, reviewed: true })} />
+          ) : null}
+
+          {active ? (
+            <View style={s.composer}>
+              <TextInput style={s.composerInput} placeholder="Type a message" placeholderTextColor={colors.muted} value={text} onChangeText={onChangeText} multiline />
+              <Pressable onPress={send} style={s.send} disabled={!text.trim()}>
+                <Ionicons name="send" size={20} color="#fff" />
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -263,7 +259,9 @@ function EndedSummary({ session }) {
 const s = StyleSheet.create({
   bar: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.primarySoft, paddingHorizontal: 16, paddingVertical: 10 },
   barText: { color: colors.primaryDark, fontSize: 13 },
-  birth: { backgroundColor: '#fff', margin: 12, marginBottom: 0, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  half: { flex: 1 },
+  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 6, backgroundColor: colors.primarySoft, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
+  toggleText: { color: colors.primaryDark, fontWeight: '600', fontSize: 12, marginRight: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   centerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16, textAlign: 'center' },
   centerSub: { fontSize: 14, color: colors.muted, marginTop: 8, textAlign: 'center' },

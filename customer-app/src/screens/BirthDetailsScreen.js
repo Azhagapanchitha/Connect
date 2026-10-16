@@ -1,0 +1,90 @@
+import React, { useState } from 'react';
+import { ScrollView, Text, View } from 'react-native';
+import { Alert } from '../alert';
+import { api } from '../api';
+import { useAuth } from '../AuthContext';
+import { Button, Chip, Input } from '../components/ui';
+import { colors, money } from '../theme';
+
+// Same rules as the server's birthDetailsProblem(), so mistakes show here before the request.
+function problems(f) {
+  const out = {};
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f.birthDate);
+  const d = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (!f.name.trim()) out.name = 'Enter the name for the reading.';
+  if (!m) out.birthDate = 'Use the format YYYY-MM-DD, e.g. 1995-04-12.';
+  else if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3] || +m[1] < 1900) out.birthDate = 'That date does not exist.';
+  else if (d > new Date()) out.birthDate = 'Date of birth cannot be in the future.';
+  if (!/^\d{2}:\d{2}$/.test(f.birthTime)) out.birthTime = 'Use 24-hour HH:MM, e.g. 06:30 or 18:45.';
+  else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(f.birthTime)) out.birthTime = 'Hours go 00–23 and minutes 00–59.';
+  if (!f.birthPlace.trim()) out.birthPlace = 'Enter the town or city, e.g. Madurai, Tamil Nadu.';
+  return out;
+}
+
+const Hint = ({ text }) => (text ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: -6, marginBottom: 10 }}>{text}</Text> : null);
+
+// Shown every time a customer taps Chat: confirm the birth details the astrologer's chart will use.
+export default function BirthDetailsScreen({ route, navigation }) {
+  const { astrologerId, astrologerName, ratePerMin } = route.params;
+  const { user, updateProfile } = useAuth();
+  const [form, setForm] = useState({
+    name: user.name || '',
+    gender: user.gender || '',
+    birthDate: user.birthDate || '',
+    birthTime: user.birthTime || '',
+    birthPlace: user.birthPlace || '',
+  });
+  const [tried, setTried] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+  const errors = problems(form);
+  const show = (k) => (tried ? errors[k] : null);
+
+  async function submit() {
+    setTried(true);
+    if (Object.keys(errors).length) return;
+    setBusy(true);
+    try {
+      await updateProfile({ ...form, name: form.name.trim(), birthPlace: form.birthPlace.trim() });
+      const session = await api('/sessions', { method: 'POST', body: { astrologerId } });
+      navigation.replace('Chat', { sessionId: session.id });
+    } catch (e) {
+      if (e.status === 402) {
+        Alert.alert('Low balance', e.message, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Recharge', onPress: () => navigation.navigate('Tabs', { screen: 'Wallet' }) },
+        ]);
+      } else {
+        Alert.alert('Could not start chat', e.message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 20, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
+      <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, marginBottom: 6 }}>
+        {astrologerName} will cast your birth chart from these details. Check them before the chat starts.
+      </Text>
+      <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: 18 }}>
+        An exact time and place give an accurate lagna and dasa. They are saved to your profile and shared only with the astrologer you chat with.
+      </Text>
+
+      <Input label="Name" value={form.name} onChangeText={set('name')} placeholder="Full name" />
+      <Hint text={show('name')} />
+      <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 6, fontWeight: '600' }}>Gender</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+        {['Female', 'Male', 'Other'].map((g) => <Chip key={g} label={g} selected={form.gender === g} onPress={() => set('gender')(g)} />)}
+      </View>
+      <Input label="Date of birth (YYYY-MM-DD)" value={form.birthDate} onChangeText={set('birthDate')} placeholder="1995-04-12" keyboardType="numbers-and-punctuation" maxLength={10} />
+      <Hint text={show('birthDate')} />
+      <Input label="Time of birth (HH:MM, 24-hour)" value={form.birthTime} onChangeText={set('birthTime')} placeholder="06:30" keyboardType="numbers-and-punctuation" maxLength={5} />
+      <Hint text={show('birthTime')} />
+      <Input label="Place of birth" value={form.birthPlace} onChangeText={set('birthPlace')} placeholder="Town or city, state, country" />
+      <Hint text={show('birthPlace')} />
+
+      <Button title={`Confirm & request chat · ${money(ratePerMin)}/min`} icon="chatbubbles" onPress={submit} loading={busy} style={{ marginTop: 8 }} />
+    </ScrollView>
+  );
+}

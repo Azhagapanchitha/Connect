@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';

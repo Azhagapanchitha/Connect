@@ -1,5 +1,6 @@
 import React from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { useAuth } from '../AuthContext';
 import { API_URL } from '../api';
 import { Avatar, Button, Card } from '../components/ui';

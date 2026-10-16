@@ -6,6 +6,7 @@ const { Server } = require('socket.io');
 const db = require('./db');
 const { daily, SIGNS } = require('./horoscope');
 const { seedIfEmpty } = require('./seed');
+const { chartFor } = require('./jathagam');
 
 const PORT = process.env.PORT || 4000;
 const DEV_OTP = '1234';                 // Replace with an SMS provider (Twilio, MSG91…) in production
@@ -352,6 +353,16 @@ app.get('/sessions', auth(), h((req) => {
   return data.sessions.filter((s) => s[key] === req.user.id).reverse().map(sessionView);
 }));
 
+// Astrologers need a full birth chart, so a chat can't start without date, time and place of birth.
+function birthDetailsProblem({ birthDate, birthTime, birthPlace }) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(birthDate || '');
+  const d = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (!m || d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3] || +m[1] < 1900 || d > new Date()) return 'Your date of birth is missing or invalid.';
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(birthTime || '')) return 'Your time of birth is missing or invalid.';
+  if (!String(birthPlace || '').trim()) return 'Your place of birth is missing.';
+  return null;
+}
+
 function sessionFor(req) {
   const s = findSession(req.params.id);
   if (!s || ![s.customerId, s.astrologerId].includes(req.user.id)) fail(404, 'Chat not found');
@@ -359,6 +370,17 @@ function sessionFor(req) {
 }
 
 app.get('/sessions/:id', auth(), h((req) => sessionView(sessionFor(req))));
+
+// Rasi chart + dasa/bhukti for the client in this chat (the place lookup is async, so no h()).
+app.get('/sessions/:id/chart', auth('astrologer'), async (req, res) => {
+  try {
+    const c = findUser(sessionFor(req).customerId);
+    res.json(await chartFor(c || {}));
+  } catch (e) {
+    if (!(e instanceof HttpError)) console.error(e);
+    res.status(e.status || 500).json({ error: e.message || 'Server error' });
+  }
+});
 
 app.get('/sessions/:id/messages', auth(), h((req) => {
   const s = sessionFor(req);
@@ -372,6 +394,8 @@ app.post('/sessions', auth('customer'), h((req) => {
   const a = findUser(req.body.astrologerId);
   if (!a || a.role !== 'astrologer') fail(404, 'Astrologer not found');
   if (!c.name) fail(400, 'Please complete your profile first');
+  const birthProblem = birthDetailsProblem(c);
+  if (birthProblem) fail(428, `${birthProblem} Add it in your profile before starting a chat.`);
   if (!a.online) fail(400, `${a.name} is offline right now`);
   if (data.sessions.some((s) => s.astrologerId === a.id && s.status === 'active')) fail(409, `${a.name} is busy in another chat`);
   if (data.sessions.some((s) => s.customerId === c.id && ['active', 'requested'].includes(s.status))) {

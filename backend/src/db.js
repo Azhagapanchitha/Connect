@@ -12,6 +12,7 @@ const empty = () => ({
   messages: [],     // { id, sessionId, senderId, text, createdAt }
   transactions: [], // wallet ledger
   reviews: [],      // { id, sessionId, astrologerId, customerId, rating, comment, createdAt }
+  places: {},       // birth place text (lowercased) -> { lat, lon, label, timeZone } or null if not found
 });
 
 let data = empty();

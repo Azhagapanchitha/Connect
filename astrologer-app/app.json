@@ -2,7 +2,7 @@
   "expo": {
     "name": "AstroConnect Partner",
     "slug": "astroconnect-partner",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -16,7 +16,14 @@
       "package": "com.astroconnect.partner",
       "adaptiveIcon": {
         "backgroundColor": "#7C2D12"
+      },
+      "versionCode": 3
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b9c44714-1f7c-4e6b-9a58-10a1e4de5a23"
       }
-    }
+    },
+    "owner": "azhagapan"
   }
 }

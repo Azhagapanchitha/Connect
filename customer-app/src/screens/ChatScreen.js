@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useHeaderHeight } from '@react-navigation/elements';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
@@ -80,6 +82,7 @@ export default function ChatScreen({ route, navigation }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
+  const headerHeight = useHeaderHeight();
   const listRef = useRef(null);
   const typingTimer = useRef(null);
   const lastTypingSent = useRef(0);
@@ -157,7 +160,8 @@ export default function ChatScreen({ route, navigation }) {
 
   return (
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90} style={{ flex: 1 }}>
+      {/* Android is edge-to-edge on this Expo SDK and no longer resizes for the keyboard, so pad on both platforms. */}
+      <KeyboardAvoidingView behavior="padding" keyboardVerticalOffset={headerHeight} style={{ flex: 1 }}>
         <View style={s.bar}>
           <Text style={s.barText}>
             <Text style={{ fontWeight: '700' }}>{STATUS_LABEL[session.status]}</Text>
@@ -197,6 +201,7 @@ export default function ChatScreen({ route, navigation }) {
             keyExtractor={(m) => m.id}
             contentContainerStyle={{ padding: 16 }}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
+            onLayout={() => listRef.current?.scrollToEnd({ animated: false })}
             ListEmptyComponent={active ? <Text style={[s.centerSub, { marginTop: 40 }]}>Say hello 👋 The chat is live.</Text> : null}
             renderItem={({ item }) => {
               const mine = item.senderId === user.id;

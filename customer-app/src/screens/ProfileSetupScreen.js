@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { useAuth } from '../AuthContext';
 import { Button, Chip, Input, SectionTitle } from '../components/ui';
 import { colors, SIGNS } from '../theme';

@@ -2,7 +2,7 @@
   "expo": {
     "name": "AstroConnect",
     "slug": "astroconnect",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -16,7 +16,14 @@
       "package": "com.astroconnect.customer",
       "adaptiveIcon": {
         "backgroundColor": "#4C1D95"
+      },
+      "versionCode": 3
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6449fbd3-f09c-4c26-8d70-0841c5a5a73c"
       }
-    }
+    },
+    "owner": "azhagapan"
   }
 }

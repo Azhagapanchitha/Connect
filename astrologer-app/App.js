@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
-import { ActivityIndicator, Alert, Vibration, View } from 'react-native';
+import { ActivityIndicator, Vibration, View } from 'react-native';
+import { Alert } from './src/alert';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';

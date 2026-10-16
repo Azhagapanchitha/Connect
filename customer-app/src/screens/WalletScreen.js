@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, Text, View } from 'react-native';
+import { FlatList, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';

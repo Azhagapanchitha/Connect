@@ -10,8 +10,10 @@
     "seed": "node src/seed.js"
   },
   "dependencies": {
+    "astronomy-engine": "^2.1.19",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "geo-tz": "^8.1.10",
     "socket.io": "^4.8.1"
   }
 }

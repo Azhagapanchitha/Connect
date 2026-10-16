@@ -12,6 +12,7 @@ import LoginScreen from './src/screens/LoginScreen';
 import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import AstrologerScreen from './src/screens/AstrologerScreen';
+import BirthDetailsScreen from './src/screens/BirthDetailsScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import ChatsScreen from './src/screens/ChatsScreen';
 import WalletScreen from './src/screens/WalletScreen';
@@ -55,6 +56,7 @@ function Root() {
         <>
           <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
           <Stack.Screen name="Astrologer" component={AstrologerScreen} options={{ title: 'Astrologer' }} />
+          <Stack.Screen name="BirthDetails" component={BirthDetailsScreen} options={{ title: 'Birth details' }} />
           <Stack.Screen name="Chat" component={ChatScreen} />
           <Stack.Screen name="EditProfile" component={ProfileSetupScreen} options={{ title: 'Edit profile' }} />
         </>

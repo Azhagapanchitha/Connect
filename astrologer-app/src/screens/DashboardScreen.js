@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';

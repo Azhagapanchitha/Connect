@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
@@ -10,7 +11,6 @@ export default function AstrologerScreen({ route, navigation }) {
   const { id } = route.params;
   const { user } = useAuth();
   const [a, setA] = useState(null);
-  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     api(`/astrologers/${id}`).then(setA).catch((e) => Alert.alert('Error', e.message));
@@ -20,24 +20,10 @@ export default function AstrologerScreen({ route, navigation }) {
     if (u.id === id) setA((prev) => (prev ? { ...prev, ...u } : prev));
   }, [id]));
 
-  async function startChat() {
+  // Birth details are confirmed on the next screen, which then sends the chat request.
+  function startChat() {
     if (!user.name) return navigation.navigate('EditProfile');
-    setBusy(true);
-    try {
-      const session = await api('/sessions', { method: 'POST', body: { astrologerId: id } });
-      navigation.navigate('Chat', { sessionId: session.id });
-    } catch (e) {
-      if (e.status === 402) {
-        Alert.alert('Low balance', e.message, [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Recharge', onPress: () => navigation.navigate('Tabs', { screen: 'Wallet' }) },
-        ]);
-      } else {
-        Alert.alert('Could not start chat', e.message);
-      }
-    } finally {
-      setBusy(false);
-    }
+    navigation.navigate('BirthDetails', { astrologerId: id, astrologerName: a.name, ratePerMin: a.ratePerMin });
   }
 
   if (!a) return <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />;
@@ -83,7 +69,7 @@ export default function AstrologerScreen({ route, navigation }) {
           <Text style={s.meta}>Wallet {money(user.wallet)}</Text>
           {available ? <Badge label="Available now" color={colors.success} /> : <Badge label={a.busy ? 'In another chat' : 'Offline'} color={colors.muted} />}
         </View>
-        <Button title={`Chat · ${money(a.ratePerMin)}/min`} icon="chatbubbles" onPress={startChat} loading={busy} disabled={!available} />
+        <Button title={`Chat · ${money(a.ratePerMin)}/min`} icon="chatbubbles" onPress={startChat} disabled={!available} />
       </View>
     </SafeAreaView>
   );
