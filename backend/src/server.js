@@ -7,6 +7,8 @@ const db = require('./db');
 const { daily, SIGNS } = require('./horoscope');
 const { seedIfEmpty } = require('./seed');
 const { chartFor } = require('./jathagam');
+const { approvedAstrologer, isAllowed } = require('./approved');
+const { callsEnabled, callToken, closeRoom } = require('./calls');
 
 const PORT = process.env.PORT || 4000;
 const DEV_OTP = '1234';                 // Replace with an SMS provider (Twilio, MSG91…) in production
@@ -16,14 +18,6 @@ const REQUEST_TIMEOUT_MS = 60 * 1000;   // Unanswered requests expire after a mi
 const BILLING_INTERVAL_MS = Number(process.env.BILLING_INTERVAL_MS) || 60 * 1000;
 
 const { data, save } = db;
-seedIfEmpty();
-
-// Sessions that were live when the server stopped can't be billed any more; close them out.
-for (const s of data.sessions) {
-  if (s.status === 'active') Object.assign(s, { status: 'ended', endedAt: db.now(), endReason: 'server_restart' });
-  if (s.status === 'requested') Object.assign(s, { status: 'missed', endedAt: db.now() });
-}
-save();
 
 const app = express();
 app.use(cors());
@@ -55,6 +49,7 @@ function sessionView(s) {
   const astrologer = findUser(s.astrologerId);
   return {
     ...s,
+    kind: s.kind || 'chat',
     customer: customer && { id: customer.id, name: customer.name, sign: customer.sign, birthDate: customer.birthDate, birthTime: customer.birthTime, birthPlace: customer.birthPlace, gender: customer.gender },
     astrologer: astrologer && { id: astrologer.id, name: astrologer.name, avatarColor: astrologer.avatarColor, ratePerMin: astrologer.ratePerMin },
   };
@@ -99,6 +94,12 @@ function auth(role) {
     const token = (req.headers.authorization || '').replace(/^Bearer /, '');
     const user = findUser(data.tokens[token]);
     if (!user) return res.status(401).json({ error: 'Not signed in' });
+    if (!isAllowed(user)) {
+      delete data.tokens[token];
+      if (user.online) { user.online = false; broadcastAstrologer(user); }
+      save();
+      return res.status(401).json({ error: 'This number is no longer registered as an AstroConnect astrologer.' });
+    }
     if (role && user.role !== role) return res.status(403).json({ error: `Only ${role}s can do this` });
     req.user = user;
     req.token = token;
@@ -141,10 +142,12 @@ function endSession(s, reason) {
   s.status = wasActive ? 'ended' : reason === 'timeout' ? 'missed' : reason === 'rejected' ? 'rejected' : 'cancelled';
   s.endedAt = db.now();
   s.endReason = reason;
+  const label = s.kind === 'call' ? 'Call' : 'Chat';
   if (wasActive && s.amount > 0) {
-    addTransaction(s.customerId, 'debit', -s.amount, `Chat with ${findUser(s.astrologerId).name} (${s.billedMinutes} min)`, s.id);
-    addTransaction(s.astrologerId, 'credit', s.astrologerEarning, `Chat with ${findUser(s.customerId).name} (${s.billedMinutes} min)`, s.id);
+    addTransaction(s.customerId, 'debit', -s.amount, `${label} with ${findUser(s.astrologerId).name} (${s.billedMinutes} min)`, s.id);
+    addTransaction(s.astrologerId, 'credit', s.astrologerEarning, `${label} with ${findUser(s.customerId).name} (${s.billedMinutes} min)`, s.id);
   }
+  if (s.kind === 'call') closeRoom(s.id);
   save();
   broadcastSession(s);
   broadcastAstrologer(findUser(s.astrologerId));
@@ -183,18 +186,29 @@ function postMessage(s, sender, text) {
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
+// The mobile number identifies an account (one customer and one astrologer record per number), so
+// accept +91 / 91 / 0 prefixes but always store the plain 10 digits.
+function mobileNumber(raw) {
+  let p = String(raw || '').replace(/\D/g, '');
+  if (p.length === 12 && p.startsWith('91')) p = p.slice(2);
+  else if (p.length === 11 && p.startsWith('0')) p = p.slice(1);
+  if (!/^\d{10}$/.test(p)) fail(400, 'Enter your 10-digit mobile number');
+  return p;
+}
+
 app.post('/auth/request-otp', h((req) => {
-  const phone = String(req.body.phone || '').replace(/\D/g, '');
-  if (phone.length < 10) fail(400, 'Enter a valid phone number');
+  mobileNumber(req.body.phone);
   // In production: generate a random code, store a hash with expiry, and send it by SMS.
   return { ok: true, devOtp: DEV_OTP };
 }));
 
 app.post('/auth/verify', h((req) => {
-  const phone = String(req.body.phone || '').replace(/\D/g, '');
+  const phone = mobileNumber(req.body.phone);
   const { otp, role } = req.body;
   if (!['customer', 'astrologer'].includes(role)) fail(400, 'Invalid role');
   if (otp !== DEV_OTP) fail(401, 'Incorrect OTP');
+  const approved = role === 'astrologer' ? approvedAstrologer(phone) : null;
+  if (role === 'astrologer' && !approved) fail(403, "This number isn't registered as an AstroConnect astrologer. Ask the admin to add you.");
 
   let user = data.users.find((u) => u.phone === phone && u.role === role);
   let isNew = false;
@@ -210,6 +224,7 @@ app.post('/auth/verify', h((req) => {
         };
     data.users.push(user);
   }
+  if (approved?.name) user.name = approved.name; // the admin list owns astrologer names
   const token = crypto.randomBytes(24).toString('hex');
   data.tokens[token] = user.id;
   save();
@@ -232,7 +247,8 @@ app.patch('/me', auth(), h((req) => {
   const u = req.user;
   const b = req.body;
   const str = (v, max = 200) => String(v ?? '').trim().slice(0, max);
-  if (b.name !== undefined) u.name = str(b.name, 60);
+  const listedName = u.role === 'astrologer' ? approvedAstrologer(u.phone)?.name : '';
+  if (b.name !== undefined) u.name = listedName || str(b.name, 60);
   if (u.role === 'customer') {
     for (const k of ['gender', 'birthDate', 'birthTime', 'birthPlace']) if (b[k] !== undefined) u[k] = str(b[k]);
     if (b.sign !== undefined) {
@@ -263,7 +279,7 @@ app.get('/horoscope/:sign', h((req) => daily(req.params.sign) || fail(404, 'Unkn
 
 app.get('/astrologers', auth(), h((req) => {
   const { q, skill, language, online } = req.query;
-  let list = data.users.filter((u) => u.role === 'astrologer' && u.name);
+  let list = data.users.filter((u) => u.role === 'astrologer' && u.name && isAllowed(u));
   if (q) {
     const needle = String(q).toLowerCase();
     list = list.filter((a) => [a.name, a.bio, ...a.skills].join(' ').toLowerCase().includes(needle));
@@ -278,13 +294,13 @@ app.get('/astrologers', auth(), h((req) => {
 
 app.get('/astrologers/:id', auth(), h((req) => {
   const a = findUser(req.params.id);
-  if (!a || a.role !== 'astrologer') fail(404, 'Astrologer not found');
+  if (!a || a.role !== 'astrologer' || !isAllowed(a)) fail(404, 'Astrologer not found');
   const reviews = data.reviews
     .filter((r) => r.astrologerId === a.id)
     .slice(-20)
     .reverse()
     .map((r) => ({ ...r, customerName: findUser(r.customerId)?.name || 'Customer' }));
-  return { ...publicAstrologer(a), reviews };
+  return { ...publicAstrologer(a), reviews, callsEnabled };
 }));
 
 // ---------- customer: wallet ----------
@@ -382,6 +398,19 @@ app.get('/sessions/:id/chart', auth('astrologer'), async (req, res) => {
   }
 });
 
+// LiveKit token for a live call; both participants fetch one once the astrologer accepts.
+app.get('/sessions/:id/call-token', auth(), async (req, res) => {
+  try {
+    const s = sessionFor(req);
+    if (s.kind !== 'call') fail(400, 'This consultation is a chat, not a call');
+    if (s.status !== 'active') fail(409, 'The call is not live');
+    res.json(await callToken(s.id, req.user));
+  } catch (e) {
+    if (!(e instanceof HttpError)) console.error(e);
+    res.status(e.status || 500).json({ error: e.message || 'Server error' });
+  }
+});
+
 app.get('/sessions/:id/messages', auth(), h((req) => {
   const s = sessionFor(req);
   return data.messages.filter((m) => m.sessionId === s.id);
@@ -392,7 +421,9 @@ app.post('/sessions/:id/messages', auth(), h((req) => postMessage(sessionFor(req
 app.post('/sessions', auth('customer'), h((req) => {
   const c = req.user;
   const a = findUser(req.body.astrologerId);
-  if (!a || a.role !== 'astrologer') fail(404, 'Astrologer not found');
+  if (!a || a.role !== 'astrologer' || !isAllowed(a)) fail(404, 'Astrologer not found');
+  const kind = req.body.kind === 'call' ? 'call' : 'chat';
+  if (kind === 'call' && !callsEnabled) fail(503, 'Voice calls are not set up yet.');
   if (!c.name) fail(400, 'Please complete your profile first');
   const birthProblem = birthDetailsProblem(c);
   if (birthProblem) fail(428, `${birthProblem} Add it in your profile before starting a chat.`);
@@ -405,7 +436,7 @@ app.post('/sessions', auth('customer'), h((req) => {
   if (c.wallet < needed) fail(402, `You need at least ₹${needed} (${MIN_START_MINUTES} min) in your wallet`);
 
   const s = {
-    id: db.id(), customerId: c.id, astrologerId: a.id, status: 'requested',
+    id: db.id(), kind, customerId: c.id, astrologerId: a.id, status: 'requested',
     ratePerMin: a.ratePerMin, requestedAt: db.now(), startedAt: null, endedAt: null,
     billedMinutes: 0, amount: 0, astrologerEarning: 0, endReason: null, reviewed: false,
     topic: String(req.body.topic || '').slice(0, 200),
@@ -461,7 +492,7 @@ app.post('/sessions/:id/review', auth('customer'), h((req) => {
 
 io.use((socket, next) => {
   const user = findUser(data.tokens[socket.handshake.auth?.token]);
-  if (!user) return next(new Error('unauthorized'));
+  if (!user || !isAllowed(user)) return next(new Error('unauthorized'));
   socket.user = user;
   next();
 });
@@ -489,7 +520,30 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`AstroConnect API listening on http://localhost:${PORT}`);
-  console.log(`Dev OTP for every phone number: ${DEV_OTP}`);
+// Load the data (Firestore or the JSON file) before accepting any request.
+async function start() {
+  console.log(`Data store: ${await db.init()}`);
+  seedIfEmpty();
+
+  // Sessions that were live when the server stopped can't be billed any more; close them out.
+  for (const s of data.sessions) {
+    if (s.status === 'active') Object.assign(s, { status: 'ended', endedAt: db.now(), endReason: 'server_restart' });
+    if (s.status === 'requested') Object.assign(s, { status: 'missed', endedAt: db.now() });
+  }
+  save();
+
+  server.listen(PORT, () => {
+    console.log(`AstroConnect API listening on http://localhost:${PORT}`);
+    console.log(`Dev OTP for every phone number: ${DEV_OTP}`);
+  });
+}
+
+// pm2 restarts send SIGINT: write pending changes before exiting.
+for (const sig of ['SIGINT', 'SIGTERM']) {
+  process.once(sig, () => db.flush().finally(() => process.exit(0)));
+}
+
+start().catch((e) => {
+  console.error('Could not start:', e.message);
+  process.exit(1);
 });

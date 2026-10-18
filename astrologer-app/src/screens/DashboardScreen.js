@@ -64,7 +64,7 @@ export default function DashboardScreen({ navigation }) {
 
       {d?.active?.map((sess) => (
         <Card key={sess.id} onPress={() => navigation.navigate('Chat', { sessionId: sess.id })} style={{ backgroundColor: colors.primary }}>
-          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Live chat with {sess.customer?.name}</Text>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Live {sess.kind === 'call' ? 'call' : 'chat'} with {sess.customer?.name}</Text>
           <Text style={{ color: '#FFEFD5', marginTop: 4 }}>{sess.billedMinutes} min · {money(sess.astrologerEarning)} earned · Tap to open</Text>
         </Card>
       ))}
@@ -81,7 +81,7 @@ export default function DashboardScreen({ navigation }) {
         <Stat label="Total chats" value={d?.totalSessions ?? 0} />
       </View>
 
-      <SectionTitle>Chat requests</SectionTitle>
+      <SectionTitle>Requests</SectionTitle>
       {!d?.pending?.length ? (
         <Empty icon="notifications-outline" title="No pending requests" subtitle={online ? 'New requests will pop up here instantly.' : 'Go online to start receiving requests.'} />
       ) : (
@@ -89,7 +89,7 @@ export default function DashboardScreen({ navigation }) {
           const sg = signLabel(sess.customer?.sign);
           return (
             <Card key={sess.id}>
-              <Text style={s.name}>{sess.customer?.name}</Text>
+              <Text style={s.name}>{sess.customer?.name}{sess.kind === 'call' ? ' · voice call' : ''}</Text>
               <Text style={s.meta}>
                 {sg ? `${sg.symbol} ${sg.label} · ` : ''}{sess.customer?.gender || ''} · requested {timeAgo(sess.requestedAt)}
               </Text>

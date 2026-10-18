@@ -25,7 +25,7 @@ const Hint = ({ text }) => (text ? <Text style={{ color: colors.danger, fontSize
 
 // Shown every time a customer taps Chat: confirm the birth details the astrologer's chart will use.
 export default function BirthDetailsScreen({ route, navigation }) {
-  const { astrologerId, astrologerName, ratePerMin } = route.params;
+  const { astrologerId, astrologerName, ratePerMin, kind = 'chat' } = route.params;
   const { user, updateProfile } = useAuth();
   const [form, setForm] = useState({
     name: user.name || '',
@@ -46,7 +46,7 @@ export default function BirthDetailsScreen({ route, navigation }) {
     setBusy(true);
     try {
       await updateProfile({ ...form, name: form.name.trim(), birthPlace: form.birthPlace.trim() });
-      const session = await api('/sessions', { method: 'POST', body: { astrologerId } });
+      const session = await api('/sessions', { method: 'POST', body: { astrologerId, kind } });
       navigation.replace('Chat', { sessionId: session.id });
     } catch (e) {
       if (e.status === 402) {
@@ -55,7 +55,7 @@ export default function BirthDetailsScreen({ route, navigation }) {
           { text: 'Recharge', onPress: () => navigation.navigate('Tabs', { screen: 'Wallet' }) },
         ]);
       } else {
-        Alert.alert('Could not start chat', e.message);
+        Alert.alert(kind === 'call' ? 'Could not start call' : 'Could not start chat', e.message);
       }
     } finally {
       setBusy(false);
@@ -65,7 +65,7 @@ export default function BirthDetailsScreen({ route, navigation }) {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 20, paddingBottom: 48 }} keyboardShouldPersistTaps="handled">
       <Text style={{ color: colors.text, fontSize: 15, lineHeight: 22, marginBottom: 6 }}>
-        {astrologerName} will cast your birth chart from these details. Check them before the chat starts.
+        {astrologerName} will cast your birth chart from these details. Check them before the {kind === 'call' ? 'call' : 'chat'} starts.
       </Text>
       <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: 18 }}>
         An exact time and place give an accurate lagna and dasa. They are saved to your profile and shared only with the astrologer you chat with.
@@ -84,7 +84,7 @@ export default function BirthDetailsScreen({ route, navigation }) {
       <Input label="Place of birth" value={form.birthPlace} onChangeText={set('birthPlace')} placeholder="Town or city, state, country" />
       <Hint text={show('birthPlace')} />
 
-      <Button title={`Confirm & request chat · ${money(ratePerMin)}/min`} icon="chatbubbles" onPress={submit} loading={busy} style={{ marginTop: 8 }} />
+      <Button title={`Confirm & request ${kind === 'call' ? 'call' : 'chat'} · ${money(ratePerMin)}/min`} icon={kind === 'call' ? 'call' : 'chatbubbles'} onPress={submit} loading={busy} style={{ marginTop: 8 }} />
     </ScrollView>
   );
 }

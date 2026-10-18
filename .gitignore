@@ -6,3 +6,9 @@ web-build/
 .DS_Store
 backend/data.json
 .env
+backend/astrologers.json
+# secrets: never commit
+firebase-key.json
+*-firebase-adminsdk-*.json
+livekit.env
+.env.*

@@ -2,7 +2,7 @@
   "expo": {
     "name": "AstroConnect",
     "slug": "astroconnect",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -10,20 +10,42 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.astroconnect.customer"
+      "bundleIdentifier": "com.astroconnect.customer",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "AstroConnect uses the microphone for voice consultations with astrologers."
+      }
     },
     "android": {
       "package": "com.astroconnect.customer",
       "adaptiveIcon": {
         "backgroundColor": "#4C1D95"
       },
-      "versionCode": 3
+      "versionCode": 4,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ]
     },
     "extra": {
       "eas": {
         "projectId": "6449fbd3-f09c-4c26-8d70-0841c5a5a73c"
       }
     },
-    "owner": "azhagapan"
+    "owner": "azhagapan",
+    "plugins": [
+      "@livekit/react-native-expo-plugin",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "microphonePermission": "AstroConnect uses the microphone for voice consultations with astrologers."
+        }
+      ]
+    ]
   }
 }

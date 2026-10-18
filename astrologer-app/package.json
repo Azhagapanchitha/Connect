@@ -10,8 +10,12 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@config-plugins/react-native-webrtc": "15.0.2",
     "@expo/metro-runtime": "~57.0.16",
     "@expo/vector-icons": "^15.0.2",
+    "@livekit/react-native": "3.0.0",
+    "@livekit/react-native-expo-plugin": "1.0.3",
+    "@livekit/react-native-webrtc": "144.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.20.0",
     "@react-navigation/elements": "^2.9.45",
@@ -20,6 +24,7 @@
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-status-bar": "~57.0.1",
+    "livekit-client": "2.22.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

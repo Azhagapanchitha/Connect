@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
 import { Button, Card, Input } from '../components/ui';
+import CallPanel from '../components/CallPanel';
 import ClientPanel from '../components/Jathagam';
 import { colors, money, ROLE, signLabel, STATUS_LABEL } from '../theme';
 
@@ -97,10 +98,11 @@ export default function ChatScreen({ route, navigation }) {
 
   const other = session ? (isCustomer ? session.astrologer : session.customer) : null;
   const active = session?.status === 'active';
+  const isCall = session?.kind === 'call';
   const elapsed = useElapsed(session?.startedAt, active);
 
   async function endChat() {
-    const verb = session.status === 'requested' ? 'Cancel this request?' : 'End this chat?';
+    const verb = session.status === 'requested' ? 'Cancel this request?' : isCall ? 'End this call?' : 'End this chat?';
     Alert.alert(verb, undefined, [
       { text: 'No', style: 'cancel' },
       { text: 'Yes', style: 'destructive', onPress: () => api(`/sessions/${sessionId}/end`, { method: 'POST' }).then(setSession).catch((e) => Alert.alert('Error', e.message)) },
@@ -175,7 +177,7 @@ export default function ChatScreen({ route, navigation }) {
                 </>
               ) : (
                 <>
-                  <Text style={s.centerTitle}>{other?.name} wants to chat</Text>
+                  <Text style={s.centerTitle}>{other?.name} wants {isCall ? 'a voice call' : 'to chat'}</Text>
                   {session.topic ? <Text style={s.centerSub}>Topic: {session.topic}</Text> : null}
                   <View style={{ flexDirection: 'row', marginTop: 20 }}>
                     <Button title="Decline" variant="danger" onPress={() => respond('reject')} style={{ marginRight: 12, flex: 1 }} />
@@ -184,6 +186,8 @@ export default function ChatScreen({ route, navigation }) {
                 </>
               )}
             </View>
+          ) : isCall && active ? (
+            <CallPanel sessionId={sessionId} other={other} live={active} elapsed={elapsed} onEnd={endChat} />
           ) : (
             <FlatList
               ref={listRef}
@@ -217,7 +221,7 @@ export default function ChatScreen({ route, navigation }) {
             <ReviewForm session={session} onDone={() => setSession({ ...session, reviewed: true })} />
           ) : null}
 
-          {active ? (
+          {active && !isCall ? (
             <View style={s.composer}>
               <TextInput style={s.composerInput} placeholder="Type a message" placeholderTextColor={colors.muted} value={text} onChangeText={onChangeText} multiline />
               <Pressable onPress={send} style={s.send} disabled={!text.trim()}>

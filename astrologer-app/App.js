@@ -10,6 +10,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { api } from './src/api';
 import { AuthProvider, useAuth, useSocketEvent } from './src/AuthContext';
 import { colors, money } from './src/theme';
+import { setupCalls } from './src/call/setup';
+
+setupCalls();
 import LoginScreen from './src/screens/LoginScreen';
 import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 import DashboardScreen from './src/screens/DashboardScreen';
@@ -55,8 +58,8 @@ function IncomingRequests() {
       }
     };
     Alert.alert(
-      'New chat request',
-      `${sess.customer?.name || 'A customer'} wants to chat at ${money(sess.ratePerMin)}/min.`,
+      sess.kind === 'call' ? 'New call request' : 'New chat request',
+      `${sess.customer?.name || 'A customer'} wants ${sess.kind === 'call' ? 'a voice call' : 'to chat'} at ${money(sess.ratePerMin)}/min.`,
       [
         { text: 'Decline', style: 'destructive', onPress: () => respond('reject') },
         { text: 'Accept', onPress: () => respond('accept') },

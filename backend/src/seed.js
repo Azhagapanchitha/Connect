@@ -31,7 +31,11 @@ function seedIfEmpty() {
 module.exports = { seedIfEmpty };
 
 if (require.main === module) {
-  db.reset();
-  seedIfEmpty();
-  setTimeout(() => process.exit(0), 300);
+  (async () => {
+    console.log(`Data store: ${await db.init()}`);
+    db.reset();
+    seedIfEmpty();
+    await db.flush();
+    process.exit(0);
+  })();
 }

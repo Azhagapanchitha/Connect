@@ -20,10 +20,10 @@ export default function AstrologerScreen({ route, navigation }) {
     if (u.id === id) setA((prev) => (prev ? { ...prev, ...u } : prev));
   }, [id]));
 
-  // Birth details are confirmed on the next screen, which then sends the chat request.
-  function startChat() {
+  // Birth details are confirmed on the next screen, which then sends the chat or call request.
+  function start(kind) {
     if (!user.name) return navigation.navigate('EditProfile');
-    navigation.navigate('BirthDetails', { astrologerId: id, astrologerName: a.name, ratePerMin: a.ratePerMin });
+    navigation.navigate('BirthDetails', { astrologerId: id, astrologerName: a.name, ratePerMin: a.ratePerMin, kind });
   }
 
   if (!a) return <ActivityIndicator style={{ flex: 1 }} color={colors.primary} />;
@@ -66,10 +66,11 @@ export default function AstrologerScreen({ route, navigation }) {
 
       <View style={s.footer}>
         <View style={{ flex: 1 }}>
-          <Text style={s.meta}>Wallet {money(user.wallet)}</Text>
-          {available ? <Badge label="Available now" color={colors.success} /> : <Badge label={a.busy ? 'In another chat' : 'Offline'} color={colors.muted} />}
+          <Text style={s.meta}>Wallet {money(user.wallet)} · {money(a.ratePerMin)}/min</Text>
+          {available ? <Badge label="Available now" color={colors.success} /> : <Badge label={a.busy ? 'In a consultation' : 'Offline'} color={colors.muted} />}
         </View>
-        <Button title={`Chat · ${money(a.ratePerMin)}/min`} icon="chatbubbles" onPress={startChat} disabled={!available} />
+        <Button title="Chat" icon="chatbubbles" onPress={() => start('chat')} disabled={!available} />
+        {a.callsEnabled ? <Button title="Call" icon="call" onPress={() => start('call')} disabled={!available} style={{ marginLeft: 8 }} /> : null}
       </View>
     </SafeAreaView>
   );
