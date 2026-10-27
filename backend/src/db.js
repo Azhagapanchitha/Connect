@@ -167,7 +167,26 @@ async function flush() {
   if (syncing) await syncing;
 }
 
+// Calls onChange(doc) when a document in `col` is changed from outside this server (e.g. in the Firebase
+// console). Our own writes echo back too; those match what we last wrote and are skipped.
+function watch(col, onChange) {
+  if (!firestore) return false;
+  firestore.collection(col).onSnapshot((snap) => {
+    for (const change of snap.docChanges()) {
+      if (change.type === 'removed') continue;
+      if (written[col].get(change.doc.id) === JSON.stringify(change.doc.data())) continue;
+      onChange(change.doc.data(), change.doc.id);
+    }
+  }, (e) => console.error(`Firestore watch on ${col} stopped: ${e.message}`));
+  return true;
+}
+
+// Forget what we last wrote for a document so the next save() writes it again (e.g. to undo a bad edit).
+function rewrite(col, docId) {
+  written[col]?.delete(docId);
+}
+
 const id = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
-module.exports = { data, init, save, flush, id, now, reset: () => Object.assign(data, empty()) };
+module.exports = { data, init, save, flush, watch, rewrite, id, now, reset: () => Object.assign(data, empty()) };

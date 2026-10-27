@@ -32,6 +32,7 @@ export default function ProfileScreen({ navigation }) {
         <Row label="Wallet" value={money(user.wallet)} />
       </Card>
       <Button title="Edit profile" icon="create-outline" variant="ghost" onPress={() => navigation.navigate('EditProfile')} />
+      <Button title="Change password" icon="key-outline" variant="ghost" style={{ marginTop: 12 }} onPress={() => navigation.navigate('ChangePassword')} />
       <Button
         title="Sign out"
         variant="danger"

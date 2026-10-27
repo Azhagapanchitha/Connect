@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "960314365980",
+    "project_id": "astroconnect-1fa76",
+    "storage_bucket": "astroconnect-1fa76.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:960314365980:android:d46431bdba3b8f7d7ce7d9",
+        "android_client_info": {
+          "package_name": "com.astroconnect.partner"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwP3XvDvmYN6Z-knxOyQqKxpBcNqcK9CY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

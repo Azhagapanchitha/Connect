@@ -31,6 +31,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   if (!res.ok) {
     const err = new Error(json.error || `Request failed (${res.status})`);
     err.status = res.status;
+    err.data = json; // e.g. { needsPassword: true }
     throw err;
   }
   return json;

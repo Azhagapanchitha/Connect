@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "AstroConnect",
+    "name": "JothidaConnect",
     "slug": "astroconnect",
-    "version": "1.0.3",
+    "version": "1.0.6",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -12,7 +12,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.astroconnect.customer",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "AstroConnect uses the microphone for voice consultations with astrologers."
+        "NSMicrophoneUsageDescription": "JothidaConnect uses the microphone for voice consultations with astrologers."
       }
     },
     "android": {
@@ -20,7 +20,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#4C1D95"
       },
-      "versionCode": 4,
+      "versionCode": 7,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
@@ -43,7 +43,7 @@
       [
         "@config-plugins/react-native-webrtc",
         {
-          "microphonePermission": "AstroConnect uses the microphone for voice consultations with astrologers."
+          "microphonePermission": "JothidaConnect uses the microphone for voice consultations with astrologers."
         }
       ]
     ]

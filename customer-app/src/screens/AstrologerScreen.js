@@ -66,7 +66,7 @@ export default function AstrologerScreen({ route, navigation }) {
 
       <View style={s.footer}>
         <View style={{ flex: 1 }}>
-          <Text style={s.meta}>Wallet {money(user.wallet)} · {money(a.ratePerMin)}/min</Text>
+          <Text style={s.meta}>Wallet {money(user.wallet)}{user.packageMinutes ? ` · ${user.packageMinutes} package min` : ''} · {money(a.ratePerMin)}/min</Text>
           {available ? <Badge label="Available now" color={colors.success} /> : <Badge label={a.busy ? 'In a consultation' : 'Offline'} color={colors.muted} />}
         </View>
         <Button title="Chat" icon="chatbubbles" onPress={() => start('chat')} disabled={!available} />

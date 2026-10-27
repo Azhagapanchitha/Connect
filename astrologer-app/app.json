@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "AstroConnect Partner",
+    "name": "JothidaConnect Partner",
     "slug": "astroconnect-partner",
-    "version": "1.0.3",
+    "version": "1.0.7",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -12,7 +12,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.astroconnect.partner",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "AstroConnect Partner uses the microphone for voice consultations with clients."
+        "NSMicrophoneUsageDescription": "JothidaConnect Partner uses the microphone for voice consultations with clients."
       }
     },
     "android": {
@@ -20,17 +20,19 @@
       "adaptiveIcon": {
         "backgroundColor": "#7C2D12"
       },
-      "versionCode": 4,
+      "versionCode": 8,
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS"
       ],
       "blockedPermissions": [
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.SYSTEM_ALERT_WINDOW"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "extra": {
       "eas": {
@@ -43,7 +45,15 @@
       [
         "@config-plugins/react-native-webrtc",
         {
-          "microphonePermission": "AstroConnect Partner uses the microphone for voice consultations with clients."
+          "microphonePermission": "JothidaConnect Partner uses the microphone for voice consultations with clients."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/ring.wav"
+          ]
         }
       ]
     ]

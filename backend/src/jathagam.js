@@ -83,7 +83,7 @@ async function geocode(place) {
   if (!pending.has(key)) {
     pending.set(key, (async () => {
       const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=${encodeURIComponent(place)}`;
-      const res = await fetch(url, { headers: { 'User-Agent': 'AstroConnect/1.0 (birth chart place lookup)' }, signal: AbortSignal.timeout(8000) });
+      const res = await fetch(url, { headers: { 'User-Agent': 'JothidaConnect/1.0 (birth chart place lookup)' }, signal: AbortSignal.timeout(8000) });
       if (!res.ok) throw new Error(`Place lookup failed (${res.status})`);
       const [hit] = await res.json();
       const found = hit ? {

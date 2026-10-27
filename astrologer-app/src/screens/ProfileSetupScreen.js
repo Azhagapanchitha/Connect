@@ -18,7 +18,6 @@ export default function ProfileSetupScreen({ navigation }) {
   const [skills, setSkills] = useState(user.skills || []);
   const [languages, setLanguages] = useState(user.languages || []);
   const [experienceYears, setExp] = useState(String(user.experienceYears || ''));
-  const [ratePerMin, setRate] = useState(String(user.ratePerMin || 20));
   const [busy, setBusy] = useState(false);
 
   async function save() {
@@ -27,7 +26,7 @@ export default function ProfileSetupScreen({ navigation }) {
     if (!languages.length) return Alert.alert('Pick at least one language');
     setBusy(true);
     try {
-      await updateProfile({ name, bio, skills, languages, experienceYears: Number(experienceYears) || 0, ratePerMin: Number(ratePerMin) });
+      await updateProfile({ name, bio, skills, languages, experienceYears: Number(experienceYears) || 0 });
       if (navigation.canGoBack()) navigation.goBack();
     } catch (e) {
       Alert.alert('Could not save', e.message);
@@ -49,15 +48,8 @@ export default function ProfileSetupScreen({ navigation }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
         {LANGUAGES.map((l) => <Chip key={l} label={l} selected={languages.includes(l)} onPress={() => setLanguages(toggle(languages, l))} />)}
       </View>
-      <View style={{ flexDirection: 'row' }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Input label="Experience (years)" value={experienceYears} onChangeText={setExp} keyboardType="number-pad" maxLength={2} />
-        </View>
-        <View style={{ flex: 1, marginLeft: 8 }}>
-          <Input label="Rate (₹ per minute)" value={ratePerMin} onChangeText={setRate} keyboardType="number-pad" maxLength={3} />
-        </View>
-      </View>
-      <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 20 }}>You keep 70% of every minute billed. Payouts can be withdrawn from the Earnings tab.</Text>
+      <Input label="Experience (years)" value={experienceYears} onChangeText={setExp} keyboardType="number-pad" maxLength={2} />
+      <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 20 }}>Your rate is set by the JothidaConnect admin. You keep 70% of every minute billed. Payouts can be withdrawn from the Earnings tab.</Text>
       <Button title="Save profile" onPress={save} loading={busy} />
     </ScrollView>
   );

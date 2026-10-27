@@ -1,5 +1,5 @@
 export const ROLE = 'customer';
-export const APP_NAME = 'AstroConnect';
+export const APP_NAME = 'JothidaConnect';
 
 export const colors = {
   primary: '#6D28D9',

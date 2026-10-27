@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import { ActivityIndicator, Vibration, View } from 'react-native';
 import { Alert } from './src/alert';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +11,7 @@ import { api } from './src/api';
 import { AuthProvider, useAuth, useSocketEvent } from './src/AuthContext';
 import { colors, money } from './src/theme';
 import { setupCalls } from './src/call/setup';
+import { onRequestTapped, registerForPush } from './src/push';
 
 setupCalls();
 import LoginScreen from './src/screens/LoginScreen';
@@ -37,7 +38,7 @@ function Tabs() {
         ),
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'AstroConnect Partner' }} />
+      <Tab.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'JothidaConnect Partner' }} />
       <Tab.Screen name="Consultations" component={ChatsScreen} />
       <Tab.Screen name="Earnings" component={EarningsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -69,6 +70,16 @@ function IncomingRequests() {
   return null;
 }
 
+// Lets requests ring this phone while the app is closed, and opens a request when its notification is tapped.
+function PushSetup() {
+  useEffect(() => { registerForPush().catch((e) => console.warn('Push setup failed:', e.message)); }, []);
+  useEffect(() => onRequestTapped((sessionId) => {
+    const open = () => (navigationRef.isReady() ? navigationRef.navigate('Chat', { sessionId }) : setTimeout(open, 300));
+    open();
+  }), []);
+  return null;
+}
+
 function Root() {
   const { user, loading } = useAuth();
   if (loading) {
@@ -77,6 +88,7 @@ function Root() {
   return (
     <>
       {user?.name ? <IncomingRequests /> : null}
+      {user?.name ? <PushSetup /> : null}
       <Stack.Navigator screenOptions={{ headerTintColor: colors.primary }}>
         {!user ? (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />

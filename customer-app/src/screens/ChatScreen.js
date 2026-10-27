@@ -171,7 +171,7 @@ export default function ChatScreen({ route, navigation }) {
             {`  ·  ${money(session.ratePerMin)}/min`}
           </Text>
           <Text style={s.barText}>
-            {isCustomer ? `Wallet ${money(user.wallet)}` : `Earned ${money(session.astrologerEarning)}`}
+            {isCustomer ? `Wallet ${money(user.wallet)}${user.packageMinutes ? ` · ${user.packageMinutes} min` : ''}` : `Earned ${money(session.astrologerEarning)}`}
           </Text>
         </View>
 

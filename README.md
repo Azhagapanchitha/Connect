@@ -1,11 +1,11 @@
-# AstroConnect
+# JothidaConnect
 
 Two mobile apps plus the backend they share:
 
 | Folder | What it is |
 | --- | --- |
-| `customer-app/` | **AstroConnect** – customers browse astrologers, read their daily horoscope, top up a wallet and pay per minute for live chat consultations. |
-| `astrologer-app/` | **AstroConnect Partner** – astrologers set up a public profile, go online/offline, get chat requests as live pop-ups, chat with the client's birth details on screen, and track earnings and withdrawals. |
+| `customer-app/` | **JothidaConnect** – customers browse astrologers, read their daily horoscope, top up a wallet and pay per minute for live chat consultations. |
+| `astrologer-app/` | **JothidaConnect Partner** – astrologers set up a public profile, go online/offline, get chat requests as live pop-ups, chat with the client's birth details on screen, and track earnings and withdrawals. |
 | `backend/` | Node.js (Express + Socket.IO) API server. It handles login, profiles, the wallet, per-minute billing, real-time chat and reviews. |
 
 Both apps are built with **React Native + Expo** (JavaScript), so they run on iOS and Android from one codebase.
