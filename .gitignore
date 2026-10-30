@@ -12,3 +12,4 @@ firebase-key.json
 *-firebase-adminsdk-*.json
 livekit.env
 .env.*
+!.env.example

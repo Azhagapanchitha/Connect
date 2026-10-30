@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { FlatList, Text, View } from 'react-native';
+import { FlatList, Linking, Platform, Text, View } from 'react-native';
 import { Alert } from '../alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
@@ -8,6 +8,32 @@ import { Button, Card, Chip, SectionTitle } from '../components/ui';
 import { colors, money, timeAgo } from '../theme';
 
 const AMOUNTS = [100, 200, 500, 1000, 2000];
+
+let cashfreeSdkPromise = null;
+function loadCashfreeSdk() {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Browser window not available'));
+  if (window.Cashfree) return Promise.resolve(window.Cashfree);
+  if (cashfreeSdkPromise) return cashfreeSdkPromise;
+
+  cashfreeSdkPromise = new Promise((resolve, reject) => {
+    const existing = document.getElementById('cashfree-js-sdk');
+    if (existing) {
+      if (window.Cashfree) return resolve(window.Cashfree);
+      existing.addEventListener('load', () => resolve(window.Cashfree));
+      existing.addEventListener('error', () => reject(new Error('Failed to load Cashfree checkout SDK')));
+      return;
+    }
+    const script = document.createElement('script');
+    script.id = 'cashfree-js-sdk';
+    script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+    script.async = true;
+    script.onload = () => resolve(window.Cashfree);
+    script.onerror = () => reject(new Error('Failed to load Cashfree checkout SDK'));
+    document.body.appendChild(script);
+  });
+  return cashfreeSdkPromise;
+}
+
 
 export default function WalletScreen() {
   const { user, setUser } = useAuth();
@@ -27,10 +53,41 @@ export default function WalletScreen() {
   async function recharge() {
     setBusy(true);
     try {
-      // Demo flow: the server credits instantly. Hook up Razorpay/Stripe here for real payments.
-      await api('/wallet/recharge', { method: 'POST', body: { amount } });
-      await load();
-      Alert.alert('Recharge successful', `${money(amount)} added to your wallet`);
+      const order = await api('/wallet/cashfree/order', { method: 'POST', body: { amount } });
+
+      // Demo flow when server credentials are not configured yet
+      if (order.demo) {
+        await load();
+        return Alert.alert('Recharge successful', `${money(amount)} added to your wallet`);
+      }
+
+      if (Platform.OS === 'web') {
+        const Cashfree = await loadCashfreeSdk();
+        const cashfree = Cashfree({ mode: order.mode || 'sandbox' });
+
+        await cashfree.checkout({
+          paymentSessionId: order.paymentSessionId,
+          redirectTarget: '_modal',
+        });
+
+        // Verify with backend
+        const res = await api('/wallet/cashfree/verify', { method: 'POST', body: { orderId: order.orderId } });
+        await load();
+
+        if (res.paid) {
+          Alert.alert('Payment successful', `${money(amount)} added to your wallet`);
+        } else {
+          Alert.alert('Payment pending', 'If money was deducted, your wallet will be credited automatically once confirmed.');
+        }
+      } else {
+        // Mobile (React Native / Expo) - open Cashfree checkout link in browser
+        if (order.paymentLink) {
+          await Linking.openURL(order.paymentLink);
+          Alert.alert('Payment in progress', 'Complete your payment in the browser, then tap OK to refresh your balance.', [
+            { text: 'OK', onPress: () => load() },
+          ]);
+        }
+      }
     } catch (e) {
       Alert.alert('Recharge failed', e.message);
     } finally {

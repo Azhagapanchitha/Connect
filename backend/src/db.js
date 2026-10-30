@@ -15,13 +15,14 @@ const empty = () => ({
   sessions: [],     // chat and call consultations
   messages: [],     // { id, sessionId, senderId, text, createdAt }
   transactions: [], // wallet ledger
+  orders: [],       // payment gateway orders
   reviews: [],      // { id, sessionId, astrologerId, customerId, rating, comment, createdAt }
   places: {},       // birth place text (lowercased) -> { lat, lon, label, timeZone } or null if not found
 });
 // Firestore layout: customers/{mobile} and astrologers/{mobile} hold the accounts (the mobile number is the
 // document ID, so one record per number per role); the other lists use item.id; maps store { k, v } per key.
 const ROLE_COLLECTIONS = { customers: 'customer', astrologers: 'astrologer' };
-const LISTS = ['sessions', 'messages', 'transactions', 'reviews'];
+const LISTS = ['sessions', 'messages', 'transactions', 'reviews', 'orders'];
 const MAPS = ['tokens', 'places'];
 const LEGACY = ['users']; // pre-split accounts collection, emptied on the first save
 const COLLECTIONS = [...Object.keys(ROLE_COLLECTIONS), ...LISTS, ...MAPS, ...LEGACY];

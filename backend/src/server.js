@@ -1,3 +1,17 @@
+const fs = require('fs');
+const path = require('path');
+
+// Auto-load .env file if present
+for (const envPath of [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '..', '.env')]) {
+  if (fs.existsSync(envPath)) {
+    for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+      const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
+      if (match && !process.env[match[1]]) {
+        process.env[match[1]] = match[2].trim().replace(/^['"]|['"]$/g, '');
+      }
+    }
+  }
+}
 const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
@@ -11,6 +25,7 @@ const { approvedAstrologer, isAllowed } = require('./approved');
 const { callsEnabled, callToken, closeRoom } = require('./calls');
 const { notify, isPushToken } = require('./push');
 const passwords = require('./passwords');
+const cashfree = require('./cashfree');
 
 const PORT = process.env.PORT || 4000;
 const DEV_OTP = '1234';                 // Astrologers sign in with this; customers use a password
@@ -28,7 +43,7 @@ const { data, save } = db;
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
@@ -396,6 +411,147 @@ app.post('/wallet/recharge', auth('customer'), h((req) => {
   emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
   return { balance: req.user.wallet };
 }));
+
+app.get('/wallet/cashfree/config', auth('customer'), h(() => ({
+  configured: cashfree.isConfigured(),
+  env: cashfree.ENV,
+})));
+
+app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
+  const amount = Number(req.body.amount);
+  if (!(amount >= 50 && amount <= 50000)) {
+    return res.status(400).json({ message: 'Recharge between ₹50 and ₹50,000' });
+  }
+
+  if (!cashfree.isConfigured()) {
+    // Development demo flow when API credentials are not yet set in .env
+    req.user.wallet = round2(req.user.wallet + amount);
+    addTransaction(req.user.id, 'recharge', amount, 'Wallet recharge (Demo)');
+    save();
+    emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
+    return res.json({ demo: true, balance: req.user.wallet });
+  }
+
+  const orderId = `cf_${req.user.id.slice(0, 8)}_${Date.now()}`;
+  const origin = req.headers.origin || 'https://jothidaconnect.in';
+  const returnUrl = `${origin}/?order_id={order_id}`;
+  const notifyUrl = 'https://api.jothidaconnect.in/wallet/cashfree/webhook';
+
+  try {
+    const cfOrder = await cashfree.createOrder({
+      orderId,
+      orderAmount: amount,
+      customerId: req.user.id,
+      customerPhone: req.user.phone,
+      customerName: req.user.name,
+      returnUrl,
+      notifyUrl,
+    });
+
+    const paymentLink = cashfree.ENV === 'production'
+      ? `https://payments.cashfree.com/forms/${cfOrder.payment_session_id}`
+      : `https://payments-test.cashfree.com/forms/${cfOrder.payment_session_id}`;
+
+    const orderRecord = {
+      id: orderId,
+      userId: req.user.id,
+      amount,
+      status: cfOrder.order_status || 'ACTIVE',
+      paymentSessionId: cfOrder.payment_session_id,
+      gateway: 'cashfree',
+      createdAt: db.now(),
+      processed: false,
+    };
+    if (!data.orders) data.orders = [];
+    data.orders.push(orderRecord);
+    save();
+
+    res.json({
+      orderId,
+      paymentSessionId: cfOrder.payment_session_id,
+      paymentLink,
+      orderAmount: amount,
+      mode: cashfree.ENV,
+    });
+  } catch (err) {
+    console.error('Failed to create Cashfree order:', err);
+    res.status(err.statusCode || 500).json({ message: err.message || 'Payment initialization failed' });
+  }
+});
+
+app.post('/wallet/cashfree/verify', auth('customer'), async (req, res) => {
+  const { orderId } = req.body;
+  if (!orderId) return res.status(400).json({ message: 'Missing orderId' });
+
+  if (!cashfree.isConfigured()) {
+    return res.json({ paid: true, balance: req.user.wallet });
+  }
+
+  try {
+    const cfOrder = await cashfree.getOrder(orderId);
+    const isPaid = cfOrder.order_status === 'PAID';
+
+    if (!data.orders) data.orders = [];
+    const orderRecord = data.orders.find((o) => o.id === orderId);
+
+    if (isPaid) {
+      if (orderRecord && !orderRecord.processed) {
+        orderRecord.status = 'PAID';
+        orderRecord.processed = true;
+        orderRecord.processedAt = db.now();
+
+        req.user.wallet = round2(req.user.wallet + cfOrder.order_amount);
+        addTransaction(req.user.id, 'recharge', cfOrder.order_amount, 'Wallet recharge (Cashfree)');
+        save();
+        emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
+      }
+      return res.json({ paid: true, balance: req.user.wallet });
+    }
+
+    return res.json({ paid: false, status: cfOrder.order_status, balance: req.user.wallet });
+  } catch (err) {
+    console.error('Failed to verify Cashfree order:', err);
+    res.status(err.statusCode || 500).json({ message: err.message || 'Verification failed' });
+  }
+});
+
+app.post('/wallet/cashfree/webhook', async (req, res) => {
+  const signature = req.headers['x-webhook-signature'];
+  const timestamp = req.headers['x-webhook-timestamp'];
+
+  if (cashfree.isConfigured() && req.rawBody) {
+    const valid = cashfree.verifyWebhook(req.rawBody, signature, timestamp);
+    if (!valid) {
+      console.warn('Invalid Cashfree webhook signature');
+      return res.status(400).send('Invalid signature');
+    }
+  }
+
+  const event = req.body;
+  const orderData = event?.data?.order || event?.data;
+  const orderId = orderData?.order_id;
+  const orderStatus = orderData?.order_status || event?.type;
+
+  if (orderId && (orderStatus === 'PAID' || event?.type === 'PAYMENT_SUCCESS_WEBHOOK')) {
+    if (!data.orders) data.orders = [];
+    const orderRecord = data.orders.find((o) => o.id === orderId);
+    if (orderRecord && !orderRecord.processed) {
+      const user = findUser(orderRecord.userId);
+      if (user) {
+        orderRecord.status = 'PAID';
+        orderRecord.processed = true;
+        orderRecord.processedAt = db.now();
+
+        user.wallet = round2(user.wallet + orderRecord.amount);
+        addTransaction(user.id, 'recharge', orderRecord.amount, 'Wallet recharge (Cashfree)');
+        save();
+        emitToUser(user.id, 'wallet:update', { balance: user.wallet });
+      }
+    }
+  }
+
+  res.status(200).send('OK');
+});
 
 app.get('/packages', auth('customer'), h((req) => ({
   packages: PACKAGES.map((p) => ({ ...p, perMinute: p.price / p.minutes })),
