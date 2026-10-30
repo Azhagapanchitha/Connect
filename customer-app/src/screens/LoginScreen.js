@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Image, KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +25,9 @@ const COPY = {
 
 export default function LoginScreen() {
   const { signInWithPassword } = useAuth();
+  const scrollView = useRef(null);
+  const sheetY = useRef(0);
+  const contactSectionY = useRef(0);
   const [mode, setMode] = useState('login'); // login | register | set (older account without a password)
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
@@ -69,22 +72,42 @@ export default function LoginScreen() {
     }
   }
 
+  async function callUs() {
+    try {
+      await Linking.openURL('tel:8248952902');
+    } catch (e) {
+      Alert.alert('Unable to make a call', e.message);
+    }
+  }
+
+  function showContactSection() {
+    scrollView.current?.scrollTo({ y: sheetY.current + contactSectionY.current, animated: true });
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.primaryDark }}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View style={s.topBar}>
-          <Pressable onPress={contactUs} style={s.contactButton} accessibilityRole="button">
+          <Pressable onPress={showContactSection} style={s.contactButton} accessibilityRole="button">
             <Ionicons name="mail-outline" size={16} color={colors.primary} />
             <Text style={s.contactText}>Contact Us</Text>
           </Pressable>
         </View>
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+        <ScrollView ref={scrollView} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
           <View style={s.hero}>
-            <Text style={s.logo}>✦</Text>
-            <Text style={s.title}>{APP_NAME}</Text>
-            <Text style={s.tagline}>Talk to trusted astrologers, anytime.</Text>
+            <Image
+              source={require('../../assets/jothidaconnect-logo.png')}
+              style={s.logo}
+              resizeMode="contain"
+              accessibilityLabel="JothidaConnect logo"
+            />
           </View>
-          <View style={s.sheet}>
+          <View
+            style={s.sheet}
+            onLayout={(event) => {
+              sheetY.current = event.nativeEvent.layout.y;
+            }}
+          >
             <Text style={s.heading}>{COPY[mode].heading}</Text>
             {mode === 'set' ? <Text style={s.note}>Your account was created before passwords. Choose one to keep using it.</Text> : null}
             <Input label="Mobile number" placeholder="10-digit mobile number" keyboardType="phone-pad" value={phone} onChangeText={setPhone} maxLength={16} autoComplete="tel" />
@@ -121,7 +144,50 @@ export default function LoginScreen() {
                 <Text style={s.linkText}>Already have a password? <Text style={s.linkStrong}>Sign in</Text></Text>
               </Pressable>
             )}
-            <Text style={s.credit}>Built with Claude</Text>
+            <View
+              style={s.contactSection}
+              onLayout={(event) => {
+                contactSectionY.current = event.nativeEvent.layout.y;
+              }}
+            >
+              <Text style={s.contactHeading}>Contact Us</Text>
+              <Pressable onPress={contactUs} style={s.contactDetail} accessibilityRole="button">
+                <Ionicons name="mail-outline" size={18} color={colors.primary} />
+                <Text style={s.contactDetailText}>slakitservices@gmail.com</Text>
+              </Pressable>
+              <Pressable onPress={callUs} style={s.contactDetail} accessibilityRole="button">
+                <Ionicons name="call-outline" size={18} color={colors.primary} />
+                <Text style={s.contactDetailText}>8248952902</Text>
+              </Pressable>
+            </View>
+            <View style={s.aboutSection}>
+              <Text style={s.contactHeading}>About Us</Text>
+              <Text style={s.aboutLead}>Welcome to {APP_NAME} – Your Companion on the Journey of Life.</Text>
+              <Text style={s.aboutText}>
+                We believe that astrology can be a meaningful guide in understanding life&apos;s questions, exploring possibilities, and finding clarity when making important decisions.
+              </Text>
+              <Text style={s.aboutText}>
+                Our platform connects you with independent and experienced astrologers who are available to offer personalized consultations through voice calls and chat.
+              </Text>
+              <Text style={s.aboutText}>
+                Whether you have questions about love, relationships, marriage, career, finance, family, or personal growth, our goal is to make astrology consultations accessible, convenient, and comfortable.
+              </Text>
+              <Text style={s.aboutSubheading}>What We Offer</Text>
+              <Text style={s.aboutText}>• Personalized Consultations: Connect with astrologers for guidance based on your questions.</Text>
+              <Text style={s.aboutText}>• Voice Call Consultations: Speak directly with astrologers from anywhere.</Text>
+              <Text style={s.aboutText}>• Chat Consultations: Get guidance through convenient text conversations.</Text>
+              <Text style={s.aboutText}>• Multiple Astrologers: Explore different astrologers and choose the one that suits your preferences.</Text>
+              <Text style={s.aboutText}>• Convenience: Access astrology consultations anytime, wherever you are.</Text>
+              <Text style={s.aboutSubheading}>Our Mission</Text>
+              <Text style={s.aboutText}>
+                Our mission is to make astrology accessible to everyone by connecting people with astrologers through a simple, transparent, and user-friendly platform.
+              </Text>
+              <Text style={s.aboutSubheading}>Our Commitment</Text>
+              <Text style={s.aboutText}>
+                We strive to provide a secure, respectful, and transparent consultation experience. We aim to help users explore their questions and perspectives with greater clarity.
+              </Text>
+              <Text style={s.aboutClosing}>Your journey, your questions, your guidance.</Text>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -133,10 +199,8 @@ const s = StyleSheet.create({
   topBar: { alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 8 },
   contactButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bg, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   contactText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
-  hero: { flex: 1, minHeight: 200, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  logo: { fontSize: 56, color: colors.accent },
-  title: { fontSize: 32, fontWeight: '800', color: '#fff', marginTop: 8 },
-  tagline: { fontSize: 16, color: '#E9E3FF', marginTop: 8, textAlign: 'center' },
+  hero: { flex: 1, minHeight: 240, alignItems: 'center', justifyContent: 'center', padding: 16 },
+  logo: { width: 240, height: 240, maxWidth: '100%' },
   sheet: { backgroundColor: colors.bg, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
   heading: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 12 },
   note: { color: colors.muted, fontSize: 13, lineHeight: 19, marginBottom: 12 },
@@ -145,5 +209,14 @@ const s = StyleSheet.create({
   linkText: { color: colors.muted, fontSize: 14 },
   linkStrong: { color: colors.primary, fontWeight: '700' },
   small: { color: colors.muted, fontSize: 12, textAlign: 'center', marginTop: 12 },
+  contactSection: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 24, paddingTop: 16 },
+  aboutSection: { borderTopWidth: 1, borderTopColor: colors.border, marginTop: 24, paddingTop: 16 },
+  contactHeading: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  contactDetail: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  contactDetailText: { color: colors.primary, fontSize: 14 },
+  aboutLead: { color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 21, marginBottom: 10 },
+  aboutText: { color: colors.muted, fontSize: 13, lineHeight: 20, marginBottom: 10 },
+  aboutSubheading: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 8, marginBottom: 8 },
+  aboutClosing: { color: colors.primary, fontSize: 14, fontWeight: '700', marginTop: 4 },
   credit: { color: colors.muted, fontSize: 11, textAlign: 'center', marginTop: 24, letterSpacing: 0.3 },
 });
