@@ -85,7 +85,7 @@ export default function LoginScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.primaryDark }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bg }}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <View style={s.topBar}>
           <Pressable onPress={showContactSection} style={s.contactButton} accessibilityRole="button">
@@ -197,7 +197,7 @@ export default function LoginScreen() {
 
 const s = StyleSheet.create({
   topBar: { alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 8 },
-  contactButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bg, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  contactButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
   contactText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   hero: { flex: 1, minHeight: 240, alignItems: 'center', justifyContent: 'center', padding: 16 },
   logo: { width: 240, height: 240, maxWidth: '100%' },

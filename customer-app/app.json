@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
-      "backgroundColor": "#4C1D95"
+      "backgroundColor": "#FEFAEF"
     },
     "ios": {
       "supportsTablet": false,
