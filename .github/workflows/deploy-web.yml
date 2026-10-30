@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPO_PUBLIC_API_URL: https://64-227-167-13.sslip.io
+  EXPO_PUBLIC_API_URL: https://api.jothidaconnect.in
   DROPLET: 64.227.167.13
   # Public host key of the Droplet, so the upload only ever goes to this server.
   DROPLET_HOST_KEY: 64.227.167.13 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKKroXgokVu5G+eRpuG23bgpu4BqbPHKnlgva4v12u+0
-  SITE: https://app.64-227-167-13.sslip.io
+  SITE: https://jothidaconnect.in
 
 jobs:
   deploy:

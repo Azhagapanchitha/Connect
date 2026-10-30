@@ -10,12 +10,12 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://64-227-167-13.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://api.jothidaconnect.in"
       }
     },
     "production": {
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://64-227-167-13.sslip.io"
+        "EXPO_PUBLIC_API_URL": "https://api.jothidaconnect.in"
       }
     }
   }
