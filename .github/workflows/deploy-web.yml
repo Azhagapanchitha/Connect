@@ -1,0 +1,64 @@
+# Builds the customer web app and uploads it to the Droplet whenever customer-app/ changes on main.
+# The DROPLET_DEPLOY_KEY secret can only upload files into /var/www/app (rrsync), nothing else.
+name: Deploy customer web app
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'customer-app/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch: # "Run workflow" button on the Actions tab
+
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
+env:
+  EXPO_PUBLIC_API_URL: https://64-227-167-13.sslip.io
+  DROPLET: 64.227.167.13
+  # Public host key of the Droplet, so the upload only ever goes to this server.
+  DROPLET_HOST_KEY: 64.227.167.13 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKKroXgokVu5G+eRpuG23bgpu4BqbPHKnlgva4v12u+0
+  SITE: https://app.64-227-167-13.sslip.io
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: customer-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: customer-app/package-lock.json
+
+      - name: Install packages
+        run: npm ci
+
+      - name: Build the web app
+        run: npx expo export --platform web --clear
+
+      - name: Check the build points at the live server
+        run: |
+          grep -q "$EXPO_PUBLIC_API_URL" dist/_expo/static/js/web/*.js || { echo "Build is missing $EXPO_PUBLIC_API_URL"; exit 1; }
+          if grep -q "localhost:4000" dist/_expo/static/js/web/*.js; then echo "Build still points at localhost"; exit 1; fi
+
+      - name: Upload to the Droplet
+        env:
+          DEPLOY_KEY: ${{ secrets.DROPLET_DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo "$DROPLET_HOST_KEY" > ~/.ssh/known_hosts
+          rsync -az --delete -e "ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes" dist/ "deploy@$DROPLET:./"
+          rm -f ~/.ssh/deploy_key
+
+      - name: Check the live site
+        run: |
+          curl -fsS "$SITE/" | grep -q "<title>JothidaConnect</title>"
+          echo "Deployed to $SITE"

@@ -121,6 +121,7 @@ export default function LoginScreen() {
                 <Text style={s.linkText}>Already have a password? <Text style={s.linkStrong}>Sign in</Text></Text>
               </Pressable>
             )}
+            <Text style={s.credit}>Built with Claude</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -144,4 +145,5 @@ const s = StyleSheet.create({
   linkText: { color: colors.muted, fontSize: 14 },
   linkStrong: { color: colors.primary, fontWeight: '700' },
   small: { color: colors.muted, fontSize: 12, textAlign: 'center', marginTop: 12 },
+  credit: { color: colors.muted, fontSize: 11, textAlign: 'center', marginTop: 24, letterSpacing: 0.3 },
 });
