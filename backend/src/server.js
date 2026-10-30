@@ -479,6 +479,22 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
   }
 });
 
+// Credit a paid order to the customer who created it, exactly once, with the amount we recorded
+// when the order was made (never an amount taken from the request).
+function creditOrder(orderRecord) {
+  if (orderRecord.processed) return false;
+  const user = findUser(orderRecord.userId);
+  if (!user) return false;
+  orderRecord.status = 'PAID';
+  orderRecord.processed = true;
+  orderRecord.processedAt = db.now();
+  user.wallet = round2(user.wallet + orderRecord.amount);
+  addTransaction(user.id, 'recharge', orderRecord.amount, 'Wallet recharge (Cashfree)');
+  save();
+  emitToUser(user.id, 'wallet:update', { balance: user.wallet });
+  return true;
+}
+
 app.post('/wallet/cashfree/verify', auth('customer'), async (req, res) => {
   const { orderId } = req.body;
   if (!orderId) return res.status(400).json({ message: 'Missing orderId' });
@@ -488,23 +504,22 @@ app.post('/wallet/cashfree/verify', auth('customer'), async (req, res) => {
   }
 
   try {
+    const mine = (data.orders || []).find((o) => o.id === orderId && o.userId === req.user.id);
+    if (!mine) return res.status(404).json({ message: 'Payment not found' });
     const cfOrder = await cashfree.getOrder(orderId);
     const isPaid = cfOrder.order_status === 'PAID';
 
     if (!data.orders) data.orders = [];
     const orderRecord = data.orders.find((o) => o.id === orderId);
+    // Only the customer who started this payment can confirm it.
+    if (!orderRecord || orderRecord.userId !== req.user.id) return res.status(404).json({ message: 'Payment not found' });
 
     if (isPaid) {
-      if (orderRecord && !orderRecord.processed) {
-        orderRecord.status = 'PAID';
-        orderRecord.processed = true;
-        orderRecord.processedAt = db.now();
-
-        req.user.wallet = round2(req.user.wallet + cfOrder.order_amount);
-        addTransaction(req.user.id, 'recharge', cfOrder.order_amount, 'Wallet recharge (Cashfree)');
-        save();
-        emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
+      if (Number(cfOrder.order_amount) < orderRecord.amount) {
+        console.warn(`Cashfree order ${orderId} paid ${cfOrder.order_amount}, expected ${orderRecord.amount}; not credited`);
+        return res.status(409).json({ message: 'Payment amount does not match. Please contact support.' });
       }
+      creditOrder(orderRecord);
       return res.json({ paid: true, balance: req.user.wallet });
     }
 
@@ -519,12 +534,11 @@ app.post('/wallet/cashfree/webhook', async (req, res) => {
   const signature = req.headers['x-webhook-signature'];
   const timestamp = req.headers['x-webhook-timestamp'];
 
-  if (cashfree.isConfigured() && req.rawBody) {
-    const valid = cashfree.verifyWebhook(req.rawBody, signature, timestamp);
-    if (!valid) {
-      console.warn('Invalid Cashfree webhook signature');
-      return res.status(400).send('Invalid signature');
-    }
+  // Every notification must carry a valid Cashfree signature; without keys there are no real payments.
+  if (!cashfree.isConfigured()) return res.status(404).send('Not configured');
+  if (!req.rawBody || !cashfree.verifyWebhook(req.rawBody, signature, timestamp)) {
+    console.warn('Rejected Cashfree webhook: missing or invalid signature');
+    return res.status(400).send('Invalid signature');
   }
 
   const event = req.body;
@@ -535,19 +549,7 @@ app.post('/wallet/cashfree/webhook', async (req, res) => {
   if (orderId && (orderStatus === 'PAID' || event?.type === 'PAYMENT_SUCCESS_WEBHOOK')) {
     if (!data.orders) data.orders = [];
     const orderRecord = data.orders.find((o) => o.id === orderId);
-    if (orderRecord && !orderRecord.processed) {
-      const user = findUser(orderRecord.userId);
-      if (user) {
-        orderRecord.status = 'PAID';
-        orderRecord.processed = true;
-        orderRecord.processedAt = db.now();
-
-        user.wallet = round2(user.wallet + orderRecord.amount);
-        addTransaction(user.id, 'recharge', orderRecord.amount, 'Wallet recharge (Cashfree)');
-        save();
-        emitToUser(user.id, 'wallet:update', { balance: user.wallet });
-      }
-    }
+    if (orderRecord) creditOrder(orderRecord);
   }
 
   res.status(200).send('OK');
