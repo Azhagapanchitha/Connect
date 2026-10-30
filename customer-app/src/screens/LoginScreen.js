@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,9 +61,23 @@ export default function LoginScreen() {
     }
   }
 
+  async function contactUs() {
+    try {
+      await Linking.openURL('mailto:slakitservices@gmail.com');
+    } catch (e) {
+      Alert.alert('Unable to open email', e.message);
+    }
+  }
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.primaryDark }}>
       <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        <View style={s.topBar}>
+          <Pressable onPress={contactUs} style={s.contactButton} accessibilityRole="button">
+            <Ionicons name="mail-outline" size={16} color={colors.primary} />
+            <Text style={s.contactText}>Contact Us</Text>
+          </Pressable>
+        </View>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
           <View style={s.hero}>
             <Text style={s.logo}>✦</Text>
@@ -115,6 +129,9 @@ export default function LoginScreen() {
 }
 
 const s = StyleSheet.create({
+  topBar: { alignItems: 'flex-end', paddingHorizontal: 20, paddingTop: 8 },
+  contactButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: colors.bg, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8 },
+  contactText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
   hero: { flex: 1, minHeight: 200, alignItems: 'center', justifyContent: 'center', padding: 24 },
   logo: { fontSize: 56, color: colors.accent },
   title: { fontSize: 32, fontWeight: '800', color: '#fff', marginTop: 8 },
