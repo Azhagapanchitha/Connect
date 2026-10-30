@@ -2,7 +2,7 @@
   "expo": {
     "name": "JothidaConnect",
     "slug": "astroconnect",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "splash": {
@@ -20,7 +20,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#4C1D95"
       },
-      "versionCode": 7,
+      "versionCode": 8,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS"
