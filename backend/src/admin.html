@@ -47,6 +47,19 @@
   .avatar.sm { width: 36px; height: 36px; font-size: 13px; }
   .file-btn { position: relative; overflow: hidden; display: inline-block; }
   .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+  .tabs button { background: transparent; color: var(--primary-dark); border-color: var(--border); }
+  .tabs button.on { background: var(--primary-dark); color: #fff; border-color: var(--primary-dark); }
+  .count { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 6px; border-radius: 999px; background: var(--danger); color: #fff; font-size: 12px; line-height: 20px; }
+  .flag { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; background: #fff; }
+  .flag.done { opacity: .6; }
+  .flag .who { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .flag .who b { color: var(--text); }
+  .flag .text { white-space: pre-wrap; word-break: break-word; background: var(--bg); border-radius: 8px; padding: 8px 10px; }
+  .flag .text mark { background: #FDE68A; color: inherit; border-radius: 3px; padding: 0 2px; }
+  .flag .reasons { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .badge.warn { background: #FEE2E2; color: #991B1B; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
   .confirm { background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
   [hidden] { display: none !important; }
 </style>
@@ -74,6 +87,26 @@
 
   <!-- Registration + list -->
   <section id="appView" hidden>
+    <nav class="tabs">
+      <button id="tab-astro" type="button" class="on">Astrologers</button>
+      <button id="tab-flags" type="button">Flagged chats <span id="flagCount" class="count" hidden></span></button>
+    </nav>
+
+    <div id="flagsTab" hidden>
+      <div class="card">
+        <h2>Possible contact sharing</h2>
+        <p class="muted" style="margin-top:0">Chat messages that look like phone numbers, emails, UPI IDs, links, WhatsApp/Telegram and similar, or asking to talk outside the app. Messages are only flagged for you to check; nothing is blocked. Voice calls cannot be checked.</p>
+        <div id="flagSummary" class="chips"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-weight:400;color:var(--text);margin-bottom:12px">
+          <input id="showReviewed" type="checkbox" style="width:auto"> Show messages already marked reviewed
+        </label>
+        <div id="flagsMsg" class="msg err" hidden></div>
+        <div id="flagList"></div>
+        <p id="flagsEmpty" class="muted" hidden>Nothing to review.</p>
+      </div>
+    </div>
+
+    <div id="astroTab">
     <div class="card">
       <h2 id="formTitle">Register an astrologer</h2>
       <div id="formMsg" class="msg" hidden></div>
@@ -138,6 +171,7 @@
         </table>
       </div>
       <p id="empty" class="muted" hidden>No astrologers registered yet.</p>
+    </div>
     </div>
   </section>
 </main>
@@ -245,6 +279,104 @@
     $('appView').hidden = false;
     $('logout').hidden = false;
     load();
+    loadFlags();
+  }
+
+  function showTab(name) {
+    $('astroTab').hidden = name !== 'astro';
+    $('flagsTab').hidden = name !== 'flags';
+    $('tab-astro').className = name === 'astro' ? 'on' : '';
+    $('tab-flags').className = name === 'flags' ? 'on' : '';
+    if (name === 'flags') loadFlags();
+  }
+  $('tab-astro').addEventListener('click', function () { showTab('astro'); });
+  $('tab-flags').addEventListener('click', function () { showTab('flags'); });
+  $('showReviewed').addEventListener('change', function () { loadFlags(); });
+
+  async function loadFlags() {
+    show($('flagsMsg'), '');
+    try {
+      var r = await call('GET', '/admin/flags' + ($('showReviewed').checked ? '?show=all' : ''));
+      $('flagCount').textContent = r.open;
+      $('flagCount').hidden = !r.open;
+      renderFlagSummary(r.byAstrologer);
+      renderFlags(r.flags);
+    } catch (err) {
+      if (err.message !== 'signed out') show($('flagsMsg'), err.message, 'err');
+    }
+  }
+
+  function renderFlagSummary(rows) {
+    var box = $('flagSummary');
+    box.textContent = '';
+    rows.forEach(function (a) {
+      box.appendChild(badge(a.name + ': ' + a.open + ' to review' + (a.total > a.open ? ' (' + a.total + ' total)' : ''), a.open ? 'warn' : ''));
+    });
+  }
+
+  // The message text with every matched part wrapped in <mark>, built from text nodes only.
+  function highlighted(text, flags) {
+    var el = document.createElement('div');
+    el.className = 'text';
+    var spans = [];
+    flags.forEach(function (f) {
+      f.match.split(' | ').forEach(function (part) {
+        var at = text.indexOf(part);
+        if (part && at >= 0) spans.push([at, at + part.length]);
+      });
+    });
+    spans.sort(function (a, b) { return a[0] - b[0]; });
+    var pos = 0;
+    spans.forEach(function (sp) {
+      if (sp[0] < pos) { if (sp[1] <= pos) return; sp[0] = pos; }
+      el.appendChild(document.createTextNode(text.slice(pos, sp[0])));
+      var mk = document.createElement('mark');
+      mk.textContent = text.slice(sp[0], sp[1]);
+      el.appendChild(mk);
+      pos = sp[1];
+    });
+    el.appendChild(document.createTextNode(text.slice(pos)));
+    return el;
+  }
+
+  function renderFlags(list) {
+    var box = $('flagList');
+    box.textContent = '';
+    $('flagsEmpty').hidden = list.length > 0;
+    list.forEach(function (f) {
+      var card = document.createElement('div');
+      card.className = 'flag' + (f.reviewed ? ' done' : '');
+      var who = document.createElement('div');
+      who.className = 'who';
+      var byAstrologer = f.senderRole === 'astrologer';
+      var from = byAstrologer ? f.astrologer : f.customer;
+      var to = byAstrologer ? f.customer : f.astrologer;
+      var sender = document.createElement('b');
+      sender.textContent = (from ? from.name : byAstrologer ? 'Astrologer' : 'Customer') + (byAstrologer ? ' (astrologer)' : ' (customer)');
+      who.appendChild(sender);
+      who.appendChild(document.createTextNode(
+        (from ? ' · ' + from.phone : '') + '  →  ' + (to ? to.name + ' · ' + to.phone : '—') +
+        ' · ' + new Date(f.createdAt).toLocaleString()
+      ));
+      card.appendChild(who);
+      card.appendChild(highlighted(f.text, f.flags));
+      var reasons = document.createElement('div');
+      reasons.className = 'reasons';
+      f.flags.forEach(function (x) { reasons.appendChild(badge(x.kind, 'warn')); });
+      var spacer = document.createElement('span');
+      spacer.style.flex = '1';
+      reasons.appendChild(spacer);
+      reasons.appendChild(btn(f.reviewed ? 'Mark not reviewed' : 'Mark reviewed', 'ghost', async function () {
+        try {
+          await call('POST', '/admin/flags/' + encodeURIComponent(f.id) + '/review', { reviewed: !f.reviewed });
+          loadFlags();
+        } catch (err) {
+          if (err.message !== 'signed out') show($('flagsMsg'), err.message, 'err');
+        }
+      }));
+      card.appendChild(reasons);
+      box.appendChild(card);
+    });
   }
 
   $('loginForm').addEventListener('submit', async function (e) {
