@@ -16,7 +16,7 @@ export default function CallPanel({ sessionId, other, live, elapsed, onEnd }) {
 
   return (
     <View style={s.wrap}>
-      <Avatar name={other?.name || '?'} color={other?.avatarColor || colors.primary} size={84} online={state === 'connected' && otherJoined} />
+      <Avatar name={other?.name || '?'} color={other?.avatarColor || colors.primary} photo={other?.photo} size={84} online={state === 'connected' && otherJoined} />
       <Text style={s.name}>{other?.name}</Text>
       <View style={s.statusRow}>
         {state === 'connecting' || state === 'reconnecting' ? <ActivityIndicator size="small" color={colors.primary} style={{ marginRight: 6 }} /> : null}

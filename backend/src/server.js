@@ -43,7 +43,8 @@ const { data, save } = db;
 
 const app = express();
 app.use(cors());
-app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+// 1 MB leaves room for an astrologer photo upload from the admin page (resized to ~50 KB in the browser).
+app.use(express.json({ limit: '1mb', verify: (req, _res, buf) => { req.rawBody = buf; } }));
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
@@ -74,7 +75,7 @@ function sessionView(s) {
     ...s,
     kind: s.kind || 'chat',
     customer: customer && { id: customer.id, name: customer.name, sign: customer.sign, birthDate: customer.birthDate, birthTime: customer.birthTime, birthPlace: customer.birthPlace, gender: customer.gender },
-    astrologer: astrologer && { id: astrologer.id, name: astrologer.name, avatarColor: astrologer.avatarColor, ratePerMin: astrologer.ratePerMin },
+    astrologer: astrologer && { id: astrologer.id, name: astrologer.name, avatarColor: astrologer.avatarColor, photo: astrologer.photo, ratePerMin: astrologer.ratePerMin },
   };
 }
 
@@ -818,7 +819,7 @@ app.get('/admin', (_req, res) => {
   res.set({
     'Cache-Control': 'no-store',
     'X-Robots-Tag': 'noindex, nofollow',
-    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'",
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; frame-ancestors 'none'; form-action 'none'",
   }).type('html').send(ADMIN_PAGE);
 });
 
@@ -868,6 +869,7 @@ function adminAstrologerView({ phone, name }) {
     skills: a?.skills || [],
     languages: a?.languages || [],
     bio: a?.bio || '',
+    photo: a?.photo || null,
   };
 }
 
@@ -900,6 +902,57 @@ app.post('/admin/astrologers', adminAuth, h((req) => {
   broadcastAstrologer(a);
   console.log(`Admin ${existing ? 'updated' : 'registered'} astrologer ...${phone.slice(-4)}`);
   return { astrologer: adminAstrologerView({ phone, name }), created: !existing };
+}));
+
+// ---------- astrologer photos ----------
+// Kept as files next to the data file (the database only stores the path), so the astrologer list stays
+// small and Firestore's 1 MB document limit never matters. Each upload gets a new file name, so the app
+// can cache photos forever.
+
+const PHOTOS_DIR = process.env.PHOTOS_DIR || path.join(path.dirname(db.DATA_FILE), 'photos');
+fs.mkdirSync(PHOTOS_DIR, { recursive: true });
+const PHOTO_TYPES = { jpg: [0xff, 0xd8, 0xff], png: [0x89, 0x50, 0x4e, 0x47], webp: [0x52, 0x49, 0x46, 0x46] };
+const PHOTO_MAX_BYTES = 600 * 1024;
+const PHOTO_FILE = /^[\w-]+\.(jpg|png|webp)$/;
+
+app.get('/photos/:file', (req, res) => {
+  if (!PHOTO_FILE.test(req.params.file)) return res.status(404).end();
+  res.sendFile(path.join(PHOTOS_DIR, req.params.file), { maxAge: '365d', immutable: true }, (e) => e && !res.headersSent && res.status(404).end());
+});
+
+function deletePhoto(a) {
+  const file = a.photo && path.basename(a.photo);
+  if (file && PHOTO_FILE.test(file)) fs.rm(path.join(PHOTOS_DIR, file), { force: true }, () => {});
+  delete a.photo;
+}
+
+// Body: { image: 'data:image/jpeg;base64,...' }. The type is checked from the file's own bytes, not the label.
+app.put('/admin/astrologers/:phone/photo', adminAuth, h((req) => {
+  const a = findAstrologer(mobileNumber(req.params.phone));
+  if (!a) fail(404, 'Register the astrologer before adding a photo.');
+  const m = /^data:image\/[\w.+-]+;base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body.image || ''));
+  if (!m) fail(400, 'Choose a JPG, PNG or WebP image.');
+  const buf = Buffer.from(m[1], 'base64');
+  if (buf.length > PHOTO_MAX_BYTES) fail(413, 'That photo is too large. Use one under 600 KB.');
+  const ext = Object.keys(PHOTO_TYPES).find((k) => PHOTO_TYPES[k].every((byte, i) => buf[i] === byte));
+  if (!ext || (ext === 'webp' && buf.toString('latin1', 8, 12) !== 'WEBP')) fail(400, 'Choose a JPG, PNG or WebP image.');
+  const file = `${a.id}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(PHOTOS_DIR, file), buf);
+  deletePhoto(a);
+  a.photo = `/photos/${file}`;
+  save();
+  broadcastAstrologer(a);
+  console.log(`Admin set the photo of astrologer ...${a.phone.slice(-4)}`);
+  return { photo: a.photo };
+}));
+
+app.delete('/admin/astrologers/:phone/photo', adminAuth, h((req) => {
+  const a = findAstrologer(mobileNumber(req.params.phone));
+  if (!a) fail(404, 'That number is not registered.');
+  deletePhoto(a);
+  save();
+  broadcastAstrologer(a);
+  return { photo: null };
 }));
 
 // Remove sign-in access. The account and its history stay; it disappears from the customer app.

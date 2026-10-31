@@ -41,7 +41,7 @@ export function AstrologerRow({ a, onPress }) {
   const status = a.busy ? { label: 'Busy', color: colors.accent } : a.online ? { label: 'Online', color: colors.success } : { label: 'Offline', color: colors.muted };
   return (
     <Card onPress={onPress} style={s.row}>
-      <Avatar name={a.name} color={a.avatarColor} size={56} online={a.online && !a.busy} />
+      <Avatar name={a.name} color={a.avatarColor} photo={a.photo} size={56} online={a.online && !a.busy} />
       <View style={{ flex: 1, marginLeft: 14 }}>
         <Text style={s.name} numberOfLines={1}>{a.name}</Text>
         <Text style={s.meta} numberOfLines={1}>{a.skills.join(', ')}</Text>

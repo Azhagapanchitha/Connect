@@ -190,4 +190,4 @@ function rewrite(col, docId) {
 const id = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
 
-module.exports = { data, init, save, flush, watch, rewrite, id, now, reset: () => Object.assign(data, empty()) };
+module.exports = { data, init, save, flush, watch, rewrite, id, now, reset: () => Object.assign(data, empty()), DATA_FILE };

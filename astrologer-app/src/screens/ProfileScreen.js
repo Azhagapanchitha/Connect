@@ -11,7 +11,7 @@ export default function ProfileScreen({ navigation }) {
   return (
     <ScrollView style={{ backgroundColor: colors.bg }} contentContainerStyle={{ padding: 16 }}>
       <Card style={{ alignItems: 'center' }}>
-        <Avatar name={user.name} color={user.avatarColor} size={84} online={user.online} />
+        <Avatar name={user.name} color={user.avatarColor} photo={user.photo} size={84} online={user.online} />
         <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text, marginTop: 10 }}>{user.name}</Text>
         <Text style={{ color: colors.muted }}>+91 {user.phone}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6 }}>
