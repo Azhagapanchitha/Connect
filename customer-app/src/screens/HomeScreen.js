@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
 import { Avatar, Badge, Card, Chip, Empty, Input, Stars } from '../components/ui';
@@ -10,23 +8,11 @@ import { colors, money, signLabel } from '../theme';
 
 const SKILLS = ['All', 'Vedic', 'Tarot', 'Numerology', 'Vastu', 'Palmistry', 'Love', 'Career'];
 
-const HORO_COLLAPSED_KEY = 'horoscope:collapsed';
-
-// Tap to fold the reading down to one line, so the astrologer list sits higher; the choice is remembered.
 function HoroscopeCard({ sign, onPress }) {
   const [h, setH] = useState(null);
-  const [collapsed, setCollapsed] = useState(false);
   useEffect(() => {
     if (sign) api(`/horoscope/${sign}`).then(setH).catch(() => {});
   }, [sign]);
-  useEffect(() => {
-    AsyncStorage.getItem(HORO_COLLAPSED_KEY).then((v) => setCollapsed(v === '1')).catch(() => {});
-  }, []);
-  function toggle() {
-    const next = !collapsed;
-    setCollapsed(next);
-    AsyncStorage.setItem(HORO_COLLAPSED_KEY, next ? '1' : '0').catch(() => {});
-  }
   if (!sign) {
     return (
       <Card style={s.horo} onPress={onPress}>
@@ -37,13 +23,10 @@ function HoroscopeCard({ sign, onPress }) {
   }
   const sg = signLabel(sign);
   return (
-    <Card style={[s.horo, collapsed && s.horoCollapsed]} onPress={toggle}>
-      <View style={s.row}>
-        <Text style={[s.horoTitle, { flex: 1 }, collapsed && { marginBottom: 2 }]}>{sg.symbol} {sg.label} · Today</Text>
-        <Ionicons name={collapsed ? 'chevron-down' : 'chevron-up'} size={18} color="#D8CCFF" accessibilityLabel={collapsed ? 'Show full horoscope' : 'Hide horoscope'} />
-      </View>
-      <Text style={s.horoText} numberOfLines={collapsed ? 1 : undefined}>{h ? h.text : 'Reading the stars…'}</Text>
-      {h && !collapsed ? (
+    <Card style={s.horo}>
+      <Text style={s.horoTitle}>{sg.symbol} {sg.label} · Today</Text>
+      <Text style={s.horoText}>{h ? h.text : 'Reading the stars…'}</Text>
+      {h ? (
         <View style={[s.row, { marginTop: 12 }]}>
           <Text style={s.horoMeta}>Lucky number {h.luckyNumber}</Text>
           <Text style={s.horoMeta}>  ·  {h.luckyColor}</Text>
@@ -126,7 +109,6 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   greeting: { fontSize: 22, fontWeight: '700', color: colors.text, marginBottom: 12 },
   horo: { backgroundColor: colors.primaryDark },
-  horoCollapsed: { paddingVertical: 10 },
   horoTitle: { color: colors.accent, fontWeight: '700', fontSize: 16, marginBottom: 6 },
   horoText: { color: '#fff', fontSize: 15, lineHeight: 22 },
   horoMeta: { color: '#D8CCFF', fontSize: 12 },
