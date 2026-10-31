@@ -1,4 +1,4 @@
-// Vedic birth chart (rasi chart) and Vimshottari dasa/bhukti.
+// Vedic birth chart (rasi and navamsa charts) and Vimshottari dasa/bhukti.
 // Sidereal zodiac with Lahiri ayanamsa, mean lunar node for Rahu/Ketu, whole-sign rasi placement.
 const A = require('astronomy-engine');
 const { find: findTimeZone } = require('geo-tz');
@@ -46,9 +46,13 @@ function ascendant(t, lat, lon) {
 function placement(name, short, siderealLon, extra = {}) {
   const rasi = Math.floor(siderealLon / 30);
   const nak = Math.floor(siderealLon / NAK_SPAN);
+  // Navamsa (D9): each rasi splits into nine 3°20' parts that run on through the zodiac, so the
+  // sign is the count of parts from 0° Mesham, mod 12. Taken from the unrounded longitude.
+  const navamsa = Math.floor((siderealLon * 9) / 30) % 12;
   return {
     name, short, lon: Math.round(siderealLon * 100) / 100,
     rasi, rasiName: RASIS[rasi], rasiEn: RASI_EN[rasi], degInRasi: Math.round((siderealLon % 30) * 100) / 100,
+    navamsa, navamsaName: RASIS[navamsa],
     nakshatra: NAKSHATRAS[nak], pada: Math.floor((siderealLon % NAK_SPAN) / (NAK_SPAN / 4)) + 1, ...extra,
   };
 }

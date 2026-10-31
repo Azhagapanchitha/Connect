@@ -42,18 +42,40 @@ function BasicDetails({ c, chart }) {
   );
 }
 
-function RasiChart({ chart, birthDate }) {
+// Rasi (D1) places each body by its rasi; Navamsam (D9) by its navamsa. Same South Indian grid for both.
+const CHARTS = [
+  { key: 'rasi', label: 'Rasi' },
+  { key: 'navamsa', label: 'Navamsam' },
+];
+
+function BirthChart({ chart, birthDate }) {
+  const [tab, setTab] = useState('rasi');
+  // A server from before navamsa was added sends no navamsa field: show the rasi chart alone.
+  const tabs = chart.planets[0]?.navamsa === undefined ? CHARTS.slice(0, 1) : CHARTS;
+  const field = tabs.some((t) => t.key === tab) ? tab : 'rasi';
+  const label = CHARTS.find((t) => t.key === field).label;
   const byRasi = Array.from({ length: 12 }, () => []);
-  if (chart.lagna) byRasi[chart.lagna.rasi].push({ ...chart.lagna, isLagna: true });
-  for (const p of chart.planets) byRasi[p.rasi].push(p);
+  if (chart.lagna) byRasi[chart.lagna[field]].push({ ...chart.lagna, isLagna: true });
+  for (const p of chart.planets) byRasi[p[field]].push(p);
   return (
     <View style={s.card}>
-      <Text style={s.title}>Rasi chart</Text>
+      <View style={s.chartHead}>
+        <Text style={[s.title, { marginBottom: 0, flex: 1 }]}>{label} chart</Text>
+        {tabs.length > 1 ? (
+          <View style={s.tabs}>
+            {tabs.map((t) => (
+              <Pressable key={t.key} onPress={() => setTab(t.key)} style={[s.tab, field === t.key && s.tabOn]}>
+                <Text style={[s.tabText, field === t.key && s.tabTextOn]}>{t.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+      </View>
       <View style={s.chart}>
         {byRasi.map((list, i) => {
           const [row, col] = CELL[i];
           return (
-            <View key={i} style={[s.cell, { top: `${row * 25}%`, left: `${col * 25}%` }, chart.lagna?.rasi === i && s.lagnaCell]}>
+            <View key={i} style={[s.cell, { top: `${row * 25}%`, left: `${col * 25}%` }, chart.lagna?.[field] === i && s.lagnaCell]}>
               <Text style={s.cellSign} numberOfLines={1}>{RASI_SHORT[i]}</Text>
               <Text style={s.cellPlanets}>
                 {list.map((p, k) => (
@@ -66,7 +88,7 @@ function RasiChart({ chart, birthDate }) {
           );
         })}
         <View style={s.center}>
-          <Text style={s.centerTitle}>Rasi</Text>
+          <Text style={s.centerTitle}>{label}</Text>
           <Text style={s.centerSub}>{birthDate}</Text>
         </View>
       </View>
@@ -110,7 +132,7 @@ function DasaBhukti({ dasa }) {
   );
 }
 
-// Top half of the astrologer's chat: basic details, then rasi chart, then dasa/bhukti.
+// Top half of the astrologer's chat: basic details, then rasi/navamsam chart, then dasa/bhukti.
 export default function ClientPanel({ sessionId, customer }) {
   const [chart, setChart] = useState(null);
   const [error, setError] = useState(null);
@@ -128,7 +150,7 @@ export default function ClientPanel({ sessionId, customer }) {
       {chart?.warnings?.map((w) => <Text key={w} style={s.warn}>{w}</Text>)}
       {chart && !chart.error ? (
         <>
-          <RasiChart chart={chart} birthDate={customer.birthDate} />
+          <BirthChart chart={chart} birthDate={customer.birthDate} />
           <DasaBhukti dasa={chart.dasa} />
           <Text style={s.footnote}>Lahiri ayanamsa {chart.ayanamsa.toFixed(2)}° · mean nodes · {chart.timeZone}</Text>
         </>
@@ -143,6 +165,12 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', paddingVertical: 3 },
   rowLabel: { width: 92, color: colors.muted, fontSize: 13 },
   rowValue: { flex: 1, color: colors.text, fontSize: 13, fontWeight: '600' },
+  chartHead: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  tabs: { flexDirection: 'row', backgroundColor: colors.primarySoft, borderRadius: 8, padding: 2 },
+  tab: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 6 },
+  tabOn: { backgroundColor: colors.primaryDark },
+  tabText: { fontSize: 12, fontWeight: '600', color: colors.primaryDark },
+  tabTextOn: { color: '#fff' },
   chart: { width: '100%', maxWidth: 360, aspectRatio: 1, alignSelf: 'center', borderWidth: 1, borderColor: colors.primaryDark },
   cell: { position: 'absolute', width: '25%', height: '25%', borderWidth: 0.5, borderColor: colors.primaryDark, padding: 3 },
   lagnaCell: { backgroundColor: colors.primarySoft },
