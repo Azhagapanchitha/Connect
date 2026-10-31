@@ -35,7 +35,7 @@ function loadCashfreeSdk() {
 }
 
 
-export default function WalletScreen() {
+export default function WalletScreen({ navigation }) {
   const { user, setUser } = useAuth();
   const [txs, setTxs] = useState([]);
   const [amount, setAmount] = useState(500);
@@ -105,7 +105,10 @@ export default function WalletScreen() {
           try {
             await api('/packages/buy', { method: 'POST', body: { packageId: p.id } });
             await load();
-            Alert.alert('Package added', `${p.minutes} minutes are ready to use with any astrologer.`);
+            Alert.alert('Package added', `${p.minutes} minutes are ready to use for a chat or call with any astrologer.`, [
+              { text: 'Later', style: 'cancel' },
+              { text: 'Use now', onPress: () => navigation.navigate('Home') },
+            ]);
           } catch (e) {
             Alert.alert(e.status === 402 ? 'Not enough balance' : 'Could not buy package', e.status === 402 ? `${e.message}. Recharge below first.` : e.message);
           } finally {
@@ -130,6 +133,15 @@ export default function WalletScreen() {
             <Text style={{ color: '#D8CCFF', marginTop: 6 }}>
               Package minutes: <Text style={{ color: '#fff', fontWeight: '700' }}>{user.packageMinutes || 0}</Text>
             </Text>
+            {user.packageMinutes ? (
+              <Button
+                small
+                title="Use package: choose an astrologer"
+                icon="call"
+                onPress={() => navigation.navigate('Home')}
+                style={{ marginTop: 12, alignSelf: 'flex-start', backgroundColor: colors.accent, borderColor: colors.accent }}
+              />
+            ) : null}
           </Card>
           {packages.length ? <SectionTitle>Minute packages</SectionTitle> : null}
           {packages.map((p) => (

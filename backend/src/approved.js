@@ -49,4 +49,36 @@ function approvedAstrologer(phone) {
 
 const isAllowed = (user) => user.role !== 'astrologer' || approvedAstrologer(user.phone) !== null;
 
-module.exports = { approvedAstrologer, isAllowed, ASTROLOGERS_FILE: FILE };
+// ---------- edits from the admin page ----------
+
+// [{ phone, name }] as listed in the file (empty when there is no file).
+function listApproved() {
+  const list = approvedList();
+  return list ? [...list].map(([phone, name]) => ({ phone, name })) : [];
+}
+
+// Write via a temp file and rename, so a crash never leaves a half-written list (which would lock everyone out).
+function writeList(rows) {
+  const tmp = `${FILE}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify(rows, null, 2)}\n`);
+  fs.renameSync(tmp, FILE);
+  cache.mtimeMs = -2; // two writes within one mtime tick must still reload
+  approvedList(); // reload now and apply names to accounts
+}
+
+// Add a number to the list, or rename it if it's already there. Creating the file switches off open sign-in.
+function setApproved(phone, name) {
+  const rows = listApproved().filter((r) => r.phone !== key(phone));
+  writeList([...rows, { phone: key(phone), name: String(name).trim() }]);
+}
+
+// Take a number off the list; its account stays but can no longer sign in or be booked.
+function removeApproved(phone) {
+  const rows = listApproved();
+  const left = rows.filter((r) => r.phone !== key(phone));
+  if (left.length === rows.length) return false;
+  writeList(left);
+  return true;
+}
+
+module.exports = { approvedAstrologer, isAllowed, listApproved, setApproved, removeApproved, ASTROLOGERS_FILE: FILE };

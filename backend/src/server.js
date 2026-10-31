@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Auto-load .env file if present
-for (const envPath of [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '..', '.env')]) {
+// Auto-load .env and *.env files if present
+for (const envPath of [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '..', '.env'), path.join(__dirname, '..', 'cashfree.env'), path.join(__dirname, '..', 'livekit.env')]) {
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
       const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
@@ -20,8 +20,8 @@ const { Server } = require('socket.io');
 const db = require('./db');
 const { daily, SIGNS } = require('./horoscope');
 const { seedIfEmpty } = require('./seed');
-const { chartFor } = require('./jathagam');
-const { approvedAstrologer, isAllowed } = require('./approved');
+const { chartFor, searchPlaces } = require('./jathagam');
+const { approvedAstrologer, isAllowed, listApproved, setApproved, removeApproved } = require('./approved');
 const { callsEnabled, callToken, closeRoom } = require('./calls');
 const { notify, isPushToken } = require('./push');
 const passwords = require('./passwords');
@@ -143,11 +143,12 @@ function clearTimers(sessionId) {
 }
 
 // Charge one minute. Returns false if the customer can't afford it.
-// Package minutes are used first; after that each minute is charged from the wallet at the astrologer's rate.
+// payWith 'package' (the default): package minutes first, then the wallet at the astrologer's rate once
+// they run out. payWith 'wallet': the wallet only, leaving package minutes for another consultation.
 function billMinute(s) {
   const customer = findUser(s.customerId);
   const astrologer = findUser(s.astrologerId);
-  const fromPackage = (customer.packageMinutes || 0) > 0;
+  const fromPackage = s.payWith !== 'wallet' && (customer.packageMinutes || 0) > 0;
   if (!fromPackage && customer.wallet < s.ratePerMin) return false;
   const earning = (fromPackage ? PACKAGE_MINUTE_VALUE : s.ratePerMin) * ASTROLOGER_SHARE;
   if (fromPackage) {
@@ -290,6 +291,14 @@ app.post('/me/password', auth('customer'), h((req) => {
 }));
 
 // Find or create the account for this number and role, and start a session for it.
+// A fresh astrologer account: made on first sign-in, or ahead of it from the admin page.
+const newAstrologer = (phone) => ({
+  id: db.id(), phone, role: 'astrologer', name: '', bio: '', skills: [], languages: [], experienceYears: 0,
+  ratePerMin: 20, online: false, rating: 0, ratingCount: 0, earnings: 0,
+  avatarColor: ['#7C3AED', '#DB2777', '#EA580C', '#0891B2', '#16A34A'][Math.floor(Math.random() * 5)],
+  createdAt: db.now(),
+});
+
 function signInAs(phone, role) {
   const approved = role === 'astrologer' ? approvedAstrologer(phone) : null;
   if (role === 'astrologer' && !approved) fail(403, "This number isn't registered as an JothidaConnect astrologer. Ask the admin to add you.");
@@ -300,12 +309,7 @@ function signInAs(phone, role) {
     isNew = true;
     user = role === 'customer'
       ? { id: db.id(), phone, role, name: '', gender: '', birthDate: '', birthTime: '', birthPlace: '', sign: '', wallet: 0, createdAt: db.now() }
-      : {
-          id: db.id(), phone, role, name: '', bio: '', skills: [], languages: [], experienceYears: 0,
-          ratePerMin: 20, online: false, rating: 0, ratingCount: 0, earnings: 0,
-          avatarColor: ['#7C3AED', '#DB2777', '#EA580C', '#0891B2', '#16A34A'][Math.floor(Math.random() * 5)],
-          createdAt: db.now(),
-        };
+      : newAstrologer(phone);
     data.users.push(user);
   }
   if (approved?.name) user.name = approved.name; // the admin list owns astrologer names
@@ -365,6 +369,16 @@ app.patch('/me', auth(), h((req) => {
 // ---------- content ----------
 
 app.get('/horoscope/:sign', h((req) => daily(req.params.sign) || fail(404, 'Unknown sign')));
+
+// Birth place suggestions while the customer types.
+app.get('/places', auth(), async (req, res) => {
+  try {
+    res.json(await searchPlaces(String(req.query.q || '').slice(0, 100)));
+  } catch (e) {
+    console.error(e);
+    res.status(502).json({ error: 'Place search is unavailable right now. You can still type the place.' });
+  }
+});
 
 // ---------- customer: browse astrologers ----------
 
@@ -684,14 +698,19 @@ app.post('/sessions', auth('customer'), h((req) => {
   if (data.sessions.some((s) => s.customerId === c.id && ['active', 'requested'].includes(s.status))) {
     fail(409, 'You already have a chat in progress');
   }
-  const affordable = (c.packageMinutes || 0) + Math.floor(c.wallet / a.ratePerMin);
+  // Apps from before the choice send no payWith: keep the old behaviour (package first).
+  const payWith = req.body.payWith === 'wallet' ? 'wallet' : 'package';
+  const walletMinutes = Math.floor(c.wallet / a.ratePerMin);
+  const affordable = (payWith === 'package' ? c.packageMinutes || 0 : 0) + walletMinutes;
   if (affordable < MIN_START_MINUTES) {
-    fail(402, `You need at least ${MIN_START_MINUTES} minutes: ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet or a minutes package`);
+    fail(402, payWith === 'wallet'
+      ? `You need at least ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet for ${MIN_START_MINUTES} minutes${c.packageMinutes ? ', or pay with your package minutes' : ''}`
+      : `You need at least ${MIN_START_MINUTES} minutes: ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet or a minutes package`);
   }
 
   const s = {
     id: db.id(), kind, customerId: c.id, astrologerId: a.id, status: 'requested',
-    ratePerMin: a.ratePerMin, requestedAt: db.now(), startedAt: null, endedAt: null,
+    ratePerMin: a.ratePerMin, payWith, requestedAt: db.now(), startedAt: null, endedAt: null,
     billedMinutes: 0, amount: 0, astrologerEarning: 0, endReason: null, reviewed: false,
     topic: String(req.body.topic || '').slice(0, 200),
   };
@@ -780,6 +799,118 @@ io.on('connection', (socket) => {
     if (other !== user.id && [s.customerId, s.astrologerId].includes(user.id)) emitToUser(other, 'typing', { sessionId });
   });
 });
+
+// ---------- admin: astrologer registration ----------
+// One admin login, set on the server with ADMIN_USER and ADMIN_PASSWORD_HASH (made by `npm run admin-password`).
+// Without both, the page and its API are switched off. Admin sessions live in memory, so a restart signs out.
+
+const ADMIN_USER = process.env.ADMIN_USER || '';
+const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH || '';
+const adminEnabled = Boolean(ADMIN_USER && ADMIN_PASSWORD_HASH);
+const ADMIN_SESSION_MS = 12 * 3600 * 1000;
+const ADMIN_LOCK_KEY = 'admin'; // one account, so failed logins lock the account (5 tries, then 15 minutes)
+const adminTokens = new Map(); // token -> expiry time
+const ADMIN_PAGE = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+const sameText = (a, b) => crypto.timingSafeEqual(crypto.createHash('sha256').update(String(a)).digest(), crypto.createHash('sha256').update(String(b)).digest());
+
+app.get('/admin', (_req, res) => {
+  if (!adminEnabled) return res.status(404).type('text').send('Not found');
+  res.set({
+    'Cache-Control': 'no-store',
+    'X-Robots-Tag': 'noindex, nofollow',
+    'Content-Security-Policy': "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; form-action 'none'",
+  }).type('html').send(ADMIN_PAGE);
+});
+
+app.post('/admin/login', h((req) => {
+  if (!adminEnabled) fail(404, 'Not found');
+  const locked = passwords.lockedFor(ADMIN_LOCK_KEY);
+  if (locked) fail(429, `Too many wrong attempts. Try again in ${locked} minute${locked === 1 ? '' : 's'}.`);
+  const userOk = sameText(req.body.username || '', ADMIN_USER);
+  const passOk = passwords.checkPassword(String(req.body.password || ''), ADMIN_PASSWORD_HASH);
+  if (!userOk || !passOk) {
+    passwords.recordFailure(ADMIN_LOCK_KEY);
+    fail(401, 'Wrong username or password.');
+  }
+  passwords.recordSuccess(ADMIN_LOCK_KEY);
+  const token = crypto.randomBytes(32).toString('hex');
+  adminTokens.set(token, Date.now() + ADMIN_SESSION_MS);
+  console.log('Admin signed in');
+  return { token };
+}));
+
+function adminAuth(req, res, next) {
+  const token = (req.headers.authorization || '').replace(/^Bearer /, '');
+  const expires = adminEnabled && adminTokens.get(token);
+  if (!expires || expires < Date.now()) {
+    adminTokens.delete(token);
+    return res.status(401).json({ error: 'Please sign in again.' });
+  }
+  req.adminToken = token;
+  next();
+}
+
+app.post('/admin/logout', adminAuth, h((req) => {
+  adminTokens.delete(req.adminToken);
+  return { ok: true };
+}));
+
+const findAstrologer = (phone) => data.users.find((u) => u.role === 'astrologer' && u.phone === phone);
+
+function adminAstrologerView({ phone, name }) {
+  const a = findAstrologer(phone);
+  return {
+    phone, name,
+    signedUp: Boolean(a && Object.values(data.tokens).includes(a.id)), // has signed in to the Partner app
+    online: Boolean(a?.online),
+    ratePerMin: a?.ratePerMin ?? null,
+    experienceYears: a?.experienceYears ?? 0,
+    skills: a?.skills || [],
+    languages: a?.languages || [],
+    bio: a?.bio || '',
+  };
+}
+
+app.get('/admin/astrologers', adminAuth, h(() => ({
+  astrologers: listApproved().map(adminAstrologerView).sort((x, y) => x.name.localeCompare(y.name)),
+})));
+
+// Register a new astrologer, or update one already on the list (same mobile number).
+app.post('/admin/astrologers', adminAuth, h((req) => {
+  const b = req.body;
+  const phone = mobileNumber(b.phone);
+  const str = (v, max) => String(v ?? '').trim().slice(0, max);
+  const list = (v, max) => (Array.isArray(v) ? v : String(v || '').split(',')).map((x) => str(x, max)).filter(Boolean).slice(0, 10);
+  const name = str(b.name, 60);
+  if (name.length < 2) fail(400, 'Enter the astrologer\'s full name.');
+  const ratePerMin = Number(b.ratePerMin);
+  if (!(ratePerMin >= 1 && ratePerMin <= 1000)) fail(400, 'Rate must be between ₹1 and ₹1000 per minute.');
+  const experienceYears = Math.round(Number(b.experienceYears) || 0);
+  if (experienceYears < 0 || experienceYears > 80) fail(400, 'Experience must be between 0 and 80 years.');
+
+  const existing = findAstrologer(phone);
+  const a = existing || newAstrologer(phone);
+  Object.assign(a, {
+    name, ratePerMin: round2(ratePerMin), experienceYears,
+    skills: list(b.skills, 40), languages: list(b.languages, 30), bio: str(b.bio, 1000),
+  });
+  if (!existing) data.users.push(a);
+  setApproved(phone, name);
+  save();
+  broadcastAstrologer(a);
+  console.log(`Admin ${existing ? 'updated' : 'registered'} astrologer ...${phone.slice(-4)}`);
+  return { astrologer: adminAstrologerView({ phone, name }), created: !existing };
+}));
+
+// Remove sign-in access. The account and its history stay; it disappears from the customer app.
+app.delete('/admin/astrologers/:phone', adminAuth, h((req) => {
+  const phone = mobileNumber(req.params.phone);
+  if (!removeApproved(phone)) fail(404, 'That number is not on the astrologer list.');
+  const a = findAstrologer(phone);
+  if (a?.online) { a.online = false; save(); }
+  console.log(`Admin removed astrologer ...${phone.slice(-4)}`);
+  return { ok: true };
+}));
 
 // Load the data (Firestore or the JSON file) before accepting any request.
 async function start() {

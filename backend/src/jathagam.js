@@ -1,4 +1,4 @@
-// Vedic birth chart (rasi chart) and Vimshottari dasa/bhukti.
+// Vedic birth chart (rasi and navamsa charts) and Vimshottari dasa/bhukti.
 // Sidereal zodiac with Lahiri ayanamsa, mean lunar node for Rahu/Ketu, whole-sign rasi placement.
 const A = require('astronomy-engine');
 const { find: findTimeZone } = require('geo-tz');
@@ -46,9 +46,13 @@ function ascendant(t, lat, lon) {
 function placement(name, short, siderealLon, extra = {}) {
   const rasi = Math.floor(siderealLon / 30);
   const nak = Math.floor(siderealLon / NAK_SPAN);
+  // Navamsa (D9): each rasi splits into nine 3°20' parts that run on through the zodiac, so the
+  // sign is the count of parts from 0° Mesham, mod 12. Taken from the unrounded longitude.
+  const navamsa = Math.floor((siderealLon * 9) / 30) % 12;
   return {
     name, short, lon: Math.round(siderealLon * 100) / 100,
     rasi, rasiName: RASIS[rasi], rasiEn: RASI_EN[rasi], degInRasi: Math.round((siderealLon % 30) * 100) / 100,
+    navamsa, navamsaName: RASIS[navamsa],
     nakshatra: NAKSHATRAS[nak], pada: Math.floor((siderealLon % NAK_SPAN) / (NAK_SPAN / 4)) + 1, ...extra,
   };
 }
@@ -97,6 +101,35 @@ async function geocode(place) {
   }
   return pending.get(key);
 }
+
+// Search-as-you-type place suggestions for the birth place field, via Photon (OSM-based; Nominatim forbids autocomplete).
+// Results are cached in memory only, since they are short-lived and the chart re-geocodes the chosen label anyway.
+const suggestCache = new Map();
+async function searchPlaces(q) {
+  const key = q.trim().toLowerCase();
+  if (key.length < 2) return [];
+  if (suggestCache.has(key)) return suggestCache.get(key);
+  // Bias towards India, where most customers are born, without excluding the rest of the world.
+  const url = 'https://photon.komoot.io/api/?limit=8&lang=en&osm_tag=place:city&osm_tag=place:town&osm_tag=place:village'
+    + `&lat=20.6&lon=78.9&zoom=5&location_bias_scale=0.5&q=${encodeURIComponent(q.trim())}`;
+  const res = await fetch(url, { headers: { 'User-Agent': 'JothidaConnect/1.0 (birth place search)' }, signal: AbortSignal.timeout(6000) });
+  if (!res.ok) throw new Error(`Place search failed (${res.status})`);
+  const { features = [] } = await res.json();
+  const seen = new Set();
+  const out = [];
+  const rank = (f) => (f.properties.osm_value === 'village' ? 1 : 0); // cities and towns first, Photon's order otherwise
+  for (const { properties: p, geometry } of [...features].sort((a, b) => rank(a) - rank(b))) {
+    const label = [p.name, p.county !== p.name && p.county, p.state, p.country].filter(Boolean).join(', ');
+    if (!p.name || seen.has(label)) continue;
+    seen.add(label);
+    out.push({ label, lat: geometry.coordinates[1], lon: geometry.coordinates[0] });
+    if (out.length === 6) break;
+  }
+  if (suggestCache.size > 2000) suggestCache.clear();
+  suggestCache.set(key, out);
+  return out;
+}
+
 // Vimshottari mahadasas from birth, each with its bhuktis (antardasas).
 function vimshottari(moonLon, birth) {
   const nak = Math.floor(moonLon / NAK_SPAN);
@@ -178,4 +211,4 @@ function castChart(utc, place) {
   return { utc: utc.toISOString(), ayanamsa: Math.round(ayan * 10000) / 10000, lagna, planets, moon };
 }
 
-module.exports = { chartFor, castChart, vimshottari, localToUtc, RASIS, RASI_EN };
+module.exports = { chartFor, searchPlaces, castChart, vimshottari, localToUtc, RASIS, RASI_EN };

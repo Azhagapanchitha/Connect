@@ -3,17 +3,18 @@ import { ScrollView, Text, View } from 'react-native';
 import { Alert } from '../alert';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
+import PlaceInput from '../components/PlaceInput';
 import { Button, Chip, Input } from '../components/ui';
-import { colors, money } from '../theme';
+import { colors, dmyToIso, isoToDmy, maskDmy, money } from '../theme';
 
 // Same rules as the server's birthDetailsProblem(), so mistakes show here before the request.
 function problems(f) {
   const out = {};
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(f.birthDate);
-  const d = m && new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(f.birthDate);
+  const d = m && new Date(Date.UTC(+m[3], +m[2] - 1, +m[1]));
   if (!f.name.trim()) out.name = 'Enter the name for the reading.';
-  if (!m) out.birthDate = 'Use the format YYYY-MM-DD, e.g. 1995-04-12.';
-  else if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3] || +m[1] < 1900) out.birthDate = 'That date does not exist.';
+  if (!m) out.birthDate = 'Use the format DD/MM/YYYY, e.g. 12/04/1995.';
+  else if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[1] || +m[3] < 1900) out.birthDate = 'That date does not exist.';
   else if (d > new Date()) out.birthDate = 'Date of birth cannot be in the future.';
   if (!/^\d{2}:\d{2}$/.test(f.birthTime)) out.birthTime = 'Use 24-hour HH:MM, e.g. 06:30 or 18:45.';
   else if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(f.birthTime)) out.birthTime = 'Hours go 00–23 and minutes 00–59.';
@@ -30,10 +31,13 @@ export default function BirthDetailsScreen({ route, navigation }) {
   const [form, setForm] = useState({
     name: user.name || '',
     gender: user.gender || '',
-    birthDate: user.birthDate || '',
+    birthDate: isoToDmy(user.birthDate),
     birthTime: user.birthTime || '',
     birthPlace: user.birthPlace || '',
   });
+  // With package minutes left the customer picks how to pay; the package is the default, as it's prepaid.
+  const packageMinutes = user.packageMinutes || 0;
+  const [payWith, setPayWith] = useState(packageMinutes > 0 ? 'package' : 'wallet');
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -45,8 +49,8 @@ export default function BirthDetailsScreen({ route, navigation }) {
     if (Object.keys(errors).length) return;
     setBusy(true);
     try {
-      await updateProfile({ ...form, name: form.name.trim(), birthPlace: form.birthPlace.trim() });
-      const session = await api('/sessions', { method: 'POST', body: { astrologerId, kind } });
+      await updateProfile({ ...form, name: form.name.trim(), birthDate: dmyToIso(form.birthDate), birthPlace: form.birthPlace.trim() });
+      const session = await api('/sessions', { method: 'POST', body: { astrologerId, kind, payWith } });
       navigation.replace('Chat', { sessionId: session.id });
     } catch (e) {
       if (e.status === 402) {
@@ -77,14 +81,35 @@ export default function BirthDetailsScreen({ route, navigation }) {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
         {['Female', 'Male', 'Other'].map((g) => <Chip key={g} label={g} selected={form.gender === g} onPress={() => set('gender')(g)} />)}
       </View>
-      <Input label="Date of birth (YYYY-MM-DD)" value={form.birthDate} onChangeText={set('birthDate')} placeholder="1995-04-12" keyboardType="numbers-and-punctuation" maxLength={10} />
+      <Input label="Date of birth (DD/MM/YYYY)" value={form.birthDate} onChangeText={(t) => set('birthDate')(maskDmy(t))} placeholder="12/04/1995" keyboardType="number-pad" maxLength={10} />
       <Hint text={show('birthDate')} />
       <Input label="Time of birth (HH:MM, 24-hour)" value={form.birthTime} onChangeText={set('birthTime')} placeholder="06:30" keyboardType="numbers-and-punctuation" maxLength={5} />
       <Hint text={show('birthTime')} />
-      <Input label="Place of birth" value={form.birthPlace} onChangeText={set('birthPlace')} placeholder="Town or city, state, country" />
+      <PlaceInput label="Place of birth" value={form.birthPlace} onChangeText={set('birthPlace')} placeholder="Town or city, state, country" />
       <Hint text={show('birthPlace')} />
 
-      <Button title={`Confirm & request ${kind === 'call' ? 'call' : 'chat'} · ${money(ratePerMin)}/min`} icon={kind === 'call' ? 'call' : 'chatbubbles'} onPress={submit} loading={busy} style={{ marginTop: 8 }} />
+      {packageMinutes > 0 ? (
+        <>
+          <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 6, marginTop: 4, fontWeight: '600' }}>Pay with</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            <Chip label={`Package · ${packageMinutes} min left`} selected={payWith === 'package'} onPress={() => setPayWith('package')} />
+            <Chip label={`Wallet · ${money(user.wallet)}`} selected={payWith === 'wallet'} onPress={() => setPayWith('wallet')} />
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 }}>
+            {payWith === 'package'
+              ? `Each minute uses 1 package minute. If they run out, the rest is charged from your wallet at ${money(ratePerMin)}/min.`
+              : `Charged from your wallet at ${money(ratePerMin)}/min. Your package minutes are kept for later.`}
+          </Text>
+        </>
+      ) : null}
+
+      <Button
+        title={`Confirm & request ${kind === 'call' ? 'call' : 'chat'} · ${payWith === 'package' ? 'package minutes' : `${money(ratePerMin)}/min`}`}
+        icon={kind === 'call' ? 'call' : 'chatbubbles'}
+        onPress={submit}
+        loading={busy}
+        style={{ marginTop: 8 }}
+      />
     </ScrollView>
   );
 }

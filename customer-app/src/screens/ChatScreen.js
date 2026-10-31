@@ -8,7 +8,7 @@ import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
 import { Button, Card, Input } from '../components/ui';
 import CallPanel from '../components/CallPanel';
-import { colors, money, ROLE, signLabel, STATUS_LABEL } from '../theme';
+import { colors, isoToDmy, money, ROLE, signLabel, STATUS_LABEL } from '../theme';
 
 const isCustomer = ROLE === 'customer';
 
@@ -37,7 +37,7 @@ function BirthDetails({ c }) {
       {open ? (
         <Text style={{ color: colors.text, marginTop: 6, lineHeight: 20 }}>
           {c.name}{c.gender ? ` · ${c.gender}` : ''}{sg ? ` · ${sg.symbol} ${sg.label}` : ''}{'\n'}
-          Born {c.birthDate || '—'} at {c.birthTime || '—'}{'\n'}
+          Born {isoToDmy(c.birthDate) || '—'} at {c.birthTime || '—'}{'\n'}
           {c.birthPlace || 'Place not provided'}
         </Text>
       ) : null}

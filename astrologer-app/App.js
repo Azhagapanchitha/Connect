@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from './src/api';
 import { AuthProvider, useAuth, useSocketEvent } from './src/AuthContext';
+import { SettingsProvider } from './src/settings';
 import { colors, money } from './src/theme';
 import { setupCalls } from './src/call/setup';
 import { onRequestTapped, registerForPush } from './src/push';
@@ -21,6 +22,7 @@ import ChatsScreen from './src/screens/ChatsScreen';
 import ChatScreen from './src/screens/ChatScreen';
 import EarningsScreen from './src/screens/EarningsScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -99,6 +101,7 @@ function Root() {
             <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
             <Stack.Screen name="Chat" component={ChatScreen} />
             <Stack.Screen name="EditProfile" component={ProfileSetupScreen} options={{ title: 'Edit profile' }} />
+            <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
         )}
       </Stack.Navigator>
@@ -110,10 +113,12 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer ref={navigationRef} theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.bg, primary: colors.primary } }}>
-          <StatusBar style="dark" />
-          <Root />
-        </NavigationContainer>
+        <SettingsProvider>
+          <NavigationContainer ref={navigationRef} theme={{ ...DefaultTheme, colors: { ...DefaultTheme.colors, background: colors.bg, primary: colors.primary } }}>
+            <StatusBar style="dark" />
+            <Root />
+          </NavigationContainer>
+        </SettingsProvider>
       </AuthProvider>
     </SafeAreaProvider>
   );

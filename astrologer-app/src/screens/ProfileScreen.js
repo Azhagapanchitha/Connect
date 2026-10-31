@@ -28,6 +28,7 @@ export default function ProfileScreen({ navigation }) {
         {user.languages.map((l) => <Badge key={l} label={l} color={colors.muted} />)}
       </Card>
       <Button title="Edit public profile" icon="create-outline" variant="ghost" onPress={() => navigation.navigate('EditProfile')} />
+      <Button title="Settings" icon="settings-outline" variant="ghost" style={{ marginTop: 8 }} onPress={() => navigation.navigate('Settings')} />
       <Button
         title="Sign out"
         variant="danger"
