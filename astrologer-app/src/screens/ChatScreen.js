@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, KeyboardAvoidingView, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, PanResponder, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Alert } from '../alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
 import { Ionicons } from '@expo/vector-icons';
 import { api } from '../api';
 import { useAuth, useSocketEvent } from '../AuthContext';
+import { useSettings } from '../settings';
 import { Button, Card, Input } from '../components/ui';
 import CallPanel from '../components/CallPanel';
 import ClientPanel from '../components/Jathagam';
@@ -64,6 +65,29 @@ export default function ChatScreen({ route, navigation }) {
   const [text, setText] = useState('');
   const [typing, setTyping] = useState(false);
   const [showChart, setShowChart] = useState(true);
+  // Chart/chat split: the share of the area below the status bar given to the client chart.
+  // Dragging the handle resizes it; a tap (no real movement) hides or shows the chart instead.
+  const { settings, setSetting } = useSettings();
+  const [area, setArea] = useState(0);
+  const [split, setSplit] = useState(settings.chartSplit);
+  useEffect(() => setSplit(settings.chartSplit), [settings.chartSplit]);
+  const drag = useRef({ area: 0, split: 0, start: 0, shown: true });
+  drag.current.area = area;
+  drag.current.split = split;
+  drag.current.shown = showChart;
+  const splitter = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderGrant: () => { drag.current.start = drag.current.next = drag.current.split; },
+    onPanResponderMove: (_, g) => {
+      if (!drag.current.shown || !drag.current.area) return;
+      drag.current.next = Math.min(0.85, Math.max(0.15, drag.current.start + g.dy / drag.current.area));
+      setSplit(drag.current.next);
+    },
+    onPanResponderRelease: (_, g) => {
+      if (Math.abs(g.dy) < 6) setShowChart((v) => !v);
+      else if (drag.current.shown) setSetting('chartSplit', Math.round(drag.current.next * 100) / 100);
+    },
+  })).current;
   const headerHeight = useHeaderHeight();
   const listRef = useRef(null);
   const typingTimer = useRef(null);
@@ -156,13 +180,19 @@ export default function ChatScreen({ route, navigation }) {
           </Text>
         </View>
 
+        <View style={{ flex: 1 }} onLayout={(e) => setArea(e.nativeEvent.layout.height)}>
         {!isCustomer ? (
           <>
-            {showChart ? <View style={s.half}><ClientPanel sessionId={sessionId} customer={session.customer} /></View> : null}
-            <Pressable onPress={() => setShowChart((v) => !v)} style={s.toggle}>
-              <Text style={s.toggleText}>{showChart ? 'Hide client chart' : 'Show client chart'}</Text>
+            {showChart ? (
+              <View style={area ? { height: area * split } : s.half}>
+                <ClientPanel sessionId={sessionId} customer={session.customer} />
+              </View>
+            ) : null}
+            <View {...splitter.panHandlers} style={s.toggle}>
+              <Ionicons name="reorder-two" size={18} color={colors.primaryDark} style={{ marginRight: 6 }} />
+              <Text style={s.toggleText}>{showChart ? 'Drag to resize · tap to hide chart' : 'Show client chart'}</Text>
               <Ionicons name={showChart ? 'chevron-up' : 'chevron-down'} size={16} color={colors.primaryDark} />
-            </Pressable>
+            </View>
           </>
         ) : null}
 
@@ -230,6 +260,7 @@ export default function ChatScreen({ route, navigation }) {
             </View>
           ) : null}
         </View>
+        </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -264,7 +295,7 @@ const s = StyleSheet.create({
   bar: { flexDirection: 'row', justifyContent: 'space-between', backgroundColor: colors.primarySoft, paddingHorizontal: 16, paddingVertical: 10 },
   barText: { color: colors.primaryDark, fontSize: 13 },
   half: { flex: 1 },
-  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 6, backgroundColor: colors.primarySoft, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
+  toggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, backgroundColor: colors.primarySoft, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border },
   toggleText: { color: colors.primaryDark, fontWeight: '600', fontSize: 12, marginRight: 4 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
   centerTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 16, textAlign: 'center' },

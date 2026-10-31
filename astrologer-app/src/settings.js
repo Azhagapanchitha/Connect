@@ -3,7 +3,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Per-device app preferences, kept on the phone (not the server) so they survive sign-out.
 const SETTINGS_KEY = 'settings';
-const DEFAULTS = { chartLanguage: 'en' }; // 'en' | 'ta': language of the client's birth chart panel
+const DEFAULTS = {
+  chartLanguage: 'en', // 'en' | 'ta': language of the client's birth chart panel
+  chartSplit: 0.5,     // share of the chat screen given to the client chart (dragged in ChatScreen)
+};
 
 const SettingsContext = createContext({ settings: DEFAULTS, setSetting: () => {} });
 
