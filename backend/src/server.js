@@ -26,6 +26,7 @@ const { callsEnabled, callToken, closeRoom } = require('./calls');
 const { notify, isPushToken } = require('./push');
 const passwords = require('./passwords');
 const cashfree = require('./cashfree');
+const { contactFlags } = require('./contactcheck');
 
 const PORT = process.env.PORT || 4000;
 const DEV_OTP = '1234';                 // Astrologers sign in with this; customers use a password
@@ -212,6 +213,10 @@ function postMessage(s, sender, text) {
   const msg = { id: db.id(), sessionId: s.id, senderId: sender.id, senderRole: sender.role, text, createdAt: db.now() };
   data.messages.push(msg);
   save();
+  // Note it in the server log too; the admin page's Flagged chats tab is where these are reviewed.
+  const earlier = data.messages.filter((m) => m.sessionId === s.id && m.senderId === sender.id && m !== msg).slice(-4).map((m) => m.text);
+  const flags = contactFlags(text, earlier);
+  if (flags.length) console.log(`Possible contact sharing by ${sender.role} ...${sender.phone.slice(-4)} in ${s.id}: ${flags.map((f) => f.kind).join(', ')}`);
   emitToUser(s.customerId, 'message:new', msg);
   emitToUser(s.astrologerId, 'message:new', msg);
   return msg;
@@ -922,6 +927,63 @@ app.post('/admin/astrologers', adminAuth, h((req) => {
   broadcastAstrologer(a);
   console.log(`Admin ${existing ? 'updated' : 'registered'} astrologer ...${phone.slice(-4)}`);
   return { astrologer: adminAstrologerView({ phone, name }), created: !existing };
+}));
+
+// ---------- admin: contact-sharing monitor ----------
+// Messages are checked when the admin looks, not flagged at send time, so older chats are covered and
+// better rules apply to the past too. Only the admin's "reviewed" mark is stored, on the message.
+
+function flaggedMessages() {
+  const earlierBy = new Map(); // `${sessionId}:${senderId}` -> that sender's last few texts in the chat
+  const out = [];
+  for (const m of data.messages) {
+    const key = `${m.sessionId}:${m.senderId}`;
+    const earlier = earlierBy.get(key) || [];
+    const flags = contactFlags(m.text, earlier);
+    earlierBy.set(key, [...earlier, m.text].slice(-4));
+    if (flags.length) out.push({ m, flags });
+  }
+  return out;
+}
+
+function flagView({ m, flags }) {
+  const s = findSession(m.sessionId);
+  const astrologer = s && findUser(s.astrologerId);
+  const customer = s && findUser(s.customerId);
+  return {
+    id: m.id, text: m.text, createdAt: m.createdAt, senderRole: m.senderRole, flags,
+    reviewed: Boolean(m.flagReviewedAt),
+    session: s && { id: s.id, kind: s.kind || 'chat', startedAt: s.startedAt },
+    astrologer: astrologer && { name: astrologer.name, phone: astrologer.phone },
+    customer: customer && { name: customer.name || 'Customer', phone: customer.phone },
+  };
+}
+
+// ?show=all includes messages already marked reviewed.
+app.get('/admin/flags', adminAuth, h((req) => {
+  const all = flaggedMessages().map(flagView);
+  const byAstrologer = new Map();
+  for (const f of all) {
+    if (!f.astrologer) continue;
+    const row = byAstrologer.get(f.astrologer.phone) || { ...f.astrologer, open: 0, total: 0 };
+    row.total += 1;
+    if (!f.reviewed) row.open += 1;
+    byAstrologer.set(f.astrologer.phone, row);
+  }
+  return {
+    flags: all.filter((f) => req.query.show === 'all' || !f.reviewed).reverse(), // newest first
+    open: all.filter((f) => !f.reviewed).length,
+    byAstrologer: [...byAstrologer.values()].sort((a, b) => b.open - a.open || b.total - a.total),
+  };
+}));
+
+app.post('/admin/flags/:id/review', adminAuth, h((req) => {
+  const m = data.messages.find((x) => x.id === req.params.id);
+  if (!m) fail(404, 'Message not found');
+  if (req.body.reviewed === false) delete m.flagReviewedAt;
+  else m.flagReviewedAt = db.now();
+  save();
+  return { reviewed: Boolean(m.flagReviewedAt) };
 }));
 
 // ---------- astrologer photos ----------
