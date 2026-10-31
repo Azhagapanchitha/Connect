@@ -411,17 +411,29 @@ app.get('/astrologers/:id', auth(), h((req) => {
 
 // ---------- customer: wallet ----------
 
+// GST is charged on top of a recharge: the customer pays amount + 18% and the wallet gets the amount.
+// The server is the source of the rate; the app only shows it.
+const GST_RATE = 0.18;
+const rechargeBill = (amount) => {
+  const gst = round2(amount * GST_RATE);
+  return { amount, gst, total: round2(amount + gst) };
+};
+const paidNote = (bill) => `paid ₹${bill.total} incl. ₹${bill.gst} GST`;
+
 app.get('/wallet', auth(), h((req) => ({
   balance: req.user.role === 'customer' ? req.user.wallet : req.user.earnings,
   transactions: data.transactions.filter((t) => t.userId === req.user.id).reverse(),
+  ...(req.user.role === 'customer' ? { gstRate: GST_RATE } : {}),
 })));
 
+// Unpaid top-up for local development only. The apps use /wallet/cashfree/order; with Cashfree set up this
+// route is refused, or any customer could credit their own wallet without paying.
 app.post('/wallet/recharge', auth('customer'), h((req) => {
+  if (cashfree.isConfigured()) fail(410, 'Please update the app to recharge through Cashfree.');
   const amount = Number(req.body.amount);
   if (!(amount >= 50 && amount <= 50000)) fail(400, 'Recharge between ₹50 and ₹50,000');
-  // In production: create a payment order (Razorpay/Stripe) and credit only after the webhook confirms it.
   req.user.wallet = round2(req.user.wallet + amount);
-  addTransaction(req.user.id, 'recharge', amount, 'Wallet recharge');
+  addTransaction(req.user.id, 'recharge', amount, `Wallet recharge (Demo) · ${paidNote(rechargeBill(amount))}`);
   save();
   emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
   return { balance: req.user.wallet };
@@ -438,13 +450,15 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
     return res.status(400).json({ message: 'Recharge between ₹50 and ₹50,000' });
   }
 
+  const bill = rechargeBill(amount);
+
   if (!cashfree.isConfigured()) {
     // Development demo flow when API credentials are not yet set in .env
     req.user.wallet = round2(req.user.wallet + amount);
-    addTransaction(req.user.id, 'recharge', amount, 'Wallet recharge (Demo)');
+    addTransaction(req.user.id, 'recharge', amount, `Wallet recharge (Demo) · ${paidNote(bill)}`);
     save();
     emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
-    return res.json({ demo: true, balance: req.user.wallet });
+    return res.json({ demo: true, balance: req.user.wallet, ...bill });
   }
 
   const orderId = `cf_${req.user.id.slice(0, 8)}_${Date.now()}`;
@@ -455,7 +469,7 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
   try {
     const cfOrder = await cashfree.createOrder({
       orderId,
-      orderAmount: amount,
+      orderAmount: bill.total, // the customer pays the recharge plus GST
       customerId: req.user.id,
       customerPhone: req.user.phone,
       customerName: req.user.name,
@@ -470,7 +484,9 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
     const orderRecord = {
       id: orderId,
       userId: req.user.id,
-      amount,
+      amount, // credited to the wallet
+      gst: bill.gst,
+      total: bill.total, // charged by Cashfree
       status: cfOrder.order_status || 'ACTIVE',
       paymentSessionId: cfOrder.payment_session_id,
       gateway: 'cashfree',
@@ -485,7 +501,8 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
       orderId,
       paymentSessionId: cfOrder.payment_session_id,
       paymentLink,
-      orderAmount: amount,
+      orderAmount: bill.total,
+      ...bill,
       mode: cashfree.ENV,
     });
   } catch (err) {
@@ -504,7 +521,9 @@ function creditOrder(orderRecord) {
   orderRecord.processed = true;
   orderRecord.processedAt = db.now();
   user.wallet = round2(user.wallet + orderRecord.amount);
-  addTransaction(user.id, 'recharge', orderRecord.amount, 'Wallet recharge (Cashfree)');
+  // Orders made before GST have no total; they were charged the plain amount.
+  const note = orderRecord.total ? ` · ${paidNote(orderRecord)}` : '';
+  addTransaction(user.id, 'recharge', orderRecord.amount, `Wallet recharge (Cashfree)${note}`);
   save();
   emitToUser(user.id, 'wallet:update', { balance: user.wallet });
   return true;
@@ -530,8 +549,9 @@ app.post('/wallet/cashfree/verify', auth('customer'), async (req, res) => {
     if (!orderRecord || orderRecord.userId !== req.user.id) return res.status(404).json({ message: 'Payment not found' });
 
     if (isPaid) {
-      if (Number(cfOrder.order_amount) < orderRecord.amount) {
-        console.warn(`Cashfree order ${orderId} paid ${cfOrder.order_amount}, expected ${orderRecord.amount}; not credited`);
+      const expected = orderRecord.total ?? orderRecord.amount;
+      if (Number(cfOrder.order_amount) < expected) {
+        console.warn(`Cashfree order ${orderId} paid ${cfOrder.order_amount}, expected ${expected}; not credited`);
         return res.status(409).json({ message: 'Payment amount does not match. Please contact support.' });
       }
       creditOrder(orderRecord);

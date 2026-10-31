@@ -42,9 +42,14 @@ export default function WalletScreen({ navigation }) {
   const [busy, setBusy] = useState(false);
   const [packages, setPackages] = useState([]);
   const [buying, setBuying] = useState(null);
+  // GST is added on top of the recharge; the rate comes from the server (0 until it says otherwise).
+  const [gstRate, setGstRate] = useState(0);
+  const gst = Math.round(amount * gstRate * 100) / 100;
+  const payable = Math.round((amount + gst) * 100) / 100;
 
   const load = useCallback(() => Promise.all([api('/wallet'), api('/packages')]).then(([w, p]) => {
     setTxs(w.transactions);
+    setGstRate(w.gstRate || 0);
     setPackages(p.packages);
     setUser((u) => ({ ...u, wallet: w.balance, packageMinutes: p.packageMinutes }));
   }).catch(() => {}), [setUser]);
@@ -58,7 +63,7 @@ export default function WalletScreen({ navigation }) {
       // Demo flow when server credentials are not configured yet
       if (order.demo) {
         await load();
-        return Alert.alert('Recharge successful', `${money(amount)} added to your wallet`);
+        return Alert.alert('Recharge successful', `${money(order.amount ?? amount)} added to your wallet`);
       }
 
       if (Platform.OS === 'web') {
@@ -75,7 +80,7 @@ export default function WalletScreen({ navigation }) {
         await load();
 
         if (res.paid) {
-          Alert.alert('Payment successful', `${money(amount)} added to your wallet`);
+          Alert.alert('Payment successful', `${money(order.amount ?? amount)} added to your wallet${order.gst ? ` (paid ${money(order.total)} incl. ${money(order.gst)} GST)` : ''}`);
         } else {
           Alert.alert('Payment pending', 'If money was deducted, your wallet will be credited automatically once confirmed.');
         }
@@ -157,7 +162,24 @@ export default function WalletScreen({ navigation }) {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
             {AMOUNTS.map((a) => <Chip key={a} label={money(a)} selected={amount === a} onPress={() => setAmount(a)} />)}
           </View>
-          <Button title={`Recharge ${money(amount)}`} icon="wallet" onPress={recharge} loading={busy} style={{ marginTop: 8 }} />
+          {gstRate ? (
+            <Card style={{ marginTop: 8, marginBottom: 0, paddingVertical: 12 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ color: colors.muted }}>Recharge amount</Text>
+                <Text style={{ color: colors.text }}>{money(amount)}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                <Text style={{ color: colors.muted }}>GST ({Math.round(gstRate * 100)}%)</Text>
+                <Text style={{ color: colors.text }}>{money(gst)}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>You pay</Text>
+                <Text style={{ color: colors.text, fontWeight: '700' }}>{money(payable)}</Text>
+              </View>
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>{money(amount)} is added to your wallet.</Text>
+            </Card>
+          ) : null}
+          <Button title={gstRate ? `Pay ${money(payable)}` : `Recharge ${money(amount)}`} icon="wallet" onPress={recharge} loading={busy} style={{ marginTop: 8 }} />
           <SectionTitle style={{ marginTop: 24 }}>Transactions</SectionTitle>
           {txs.length === 0 ? <Text style={{ color: colors.muted }}>No transactions yet.</Text> : null}
         </>
