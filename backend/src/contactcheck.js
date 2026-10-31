@@ -18,10 +18,16 @@ const RULES = [
   { kind: 'Phone number in words', test: (t) => match(t, NUMBER_WORD_RUN) },
   { kind: 'Email', test: (t) => match(t, /[\w.+-]+\s*(?:@|\(at\)|\[at\])\s*[\w-]+\s*(?:\.|\(dot\)|\[dot\])\s*[a-z]{2,}/i) || match(t, /\b(?:g\s?mail|yahoo|hotmail|outlook|rediffmail)\b/i) },
   { kind: 'UPI / payment', test: (t) => match(t, /\b[\w.-]{2,}@(?:ok[a-z]+|ybl|ibl|axl|upi|paytm|apl|yapl|sbi|icici|hdfcbank|axisbank|kotak|freecharge|airtel|jio)\b/i) || match(t, /\b(?:g\s?pay|google\s?pay|phone\s?pe|paytm|bhim|upi|bank\s?(?:details|account|a\/c)|account\s?(?:number|no)|ifsc)\b/i) },
-  { kind: 'Link', test: (t) => match(t, /\b(?:https?:\/\/|www\.)\S+/i) || match(t, /\b(?:wa\.me|t\.me|bit\.ly|tinyurl\.com|linktr\.ee)\/?\S*/i) || match(t, /\b[\w-]{2,}\.(?:com|in|net|org|me|io|co|info|online|site)\b/i) },
+  // Email addresses are taken out first, so "name@gmail.com" isn't also reported as a link to gmail.com.
+  { kind: 'Link', test: (t) => linkIn(t.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, ' ')) },
   { kind: 'Messaging / social app', test: (t) => match(t, /\b(?:whats\s?app|wats\s?app|watsapp|whatsap|wtsp|wa\s?no|telegram|tele\s?gram|insta(?:gram)?|facebook|fb\s?(?:id|page)|messenger|snap\s?chat|signal\s?app|imo|botim|skype|zoom|google\s?meet|youtube\s?channel)\b/i) || match(t, /(?:வாட்ஸ்\s?அப்|வாட்சப்|டெலிகிராம்|இன்ஸ்டா)/u) },
   { kind: 'Asking to contact outside the app', test: (t) => match(t, /\b(?:my\s+(?:personal\s+)?(?:number|no\.?|mobile|cell|contact)|personal\s+(?:number|contact|no\.?)|call\s+me\s+(?:on|at|directly|direct)|contact\s+me\s+(?:on|at|directly|direct|outside)|outside\s+(?:the\s+|this\s+)?app|without\s+(?:the\s+|this\s+)?app|direct(?:ly)?\s+(?:call|contact|pay|payment)|pay\s+me\s+direct(?:ly)?|send\s+(?:me\s+)?(?:your\s+)?(?:number|no\.?)|give\s+(?:me\s+)?your\s+(?:number|no\.?))\b/i) || match(t, /(?:என்\s?நம்பர்|உங்க\s?நம்பர்|நம்பர்\s?(?:கொடுங்க|அனுப்பு)|போன்\s?நம்பர்)/u) },
 ];
+
+function linkIn(t) {
+  return match(t, /\b(?:https?:\/\/|www\.)\S+/i) || match(t, /\b(?:wa\.me|t\.me|bit\.ly|tinyurl\.com|linktr\.ee)\/?\S*/i)
+    || match(t, /\b[\w-]{2,}\.(?:com|in|net|org|me|io|co|info|online|site)\b/i);
+}
 
 function match(text, re) {
   const m = re.exec(text);
@@ -48,12 +54,6 @@ function contactFlags(text, earlier = []) {
   for (const rule of RULES) {
     const found = rule.test(text);
     if (found) flags.push({ kind: rule.kind, match: found });
-  }
-  // "name@gmail.com" also looks like a link to gmail.com; report it once, as the email.
-  const email = flags.find((f) => f.kind === 'Email');
-  if (email) {
-    const i = flags.findIndex((f) => f.kind === 'Link' && email.match.includes(f.match));
-    if (i >= 0) flags.splice(i, 1);
   }
   if (!flags.some((f) => f.kind === 'Phone number') && /\d/.test(text) && text.length <= 20) {
     // Short, mostly-digit messages in a row: join them and look again.
