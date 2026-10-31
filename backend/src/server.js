@@ -143,11 +143,12 @@ function clearTimers(sessionId) {
 }
 
 // Charge one minute. Returns false if the customer can't afford it.
-// Package minutes are used first; after that each minute is charged from the wallet at the astrologer's rate.
+// payWith 'package' (the default): package minutes first, then the wallet at the astrologer's rate once
+// they run out. payWith 'wallet': the wallet only, leaving package minutes for another consultation.
 function billMinute(s) {
   const customer = findUser(s.customerId);
   const astrologer = findUser(s.astrologerId);
-  const fromPackage = (customer.packageMinutes || 0) > 0;
+  const fromPackage = s.payWith !== 'wallet' && (customer.packageMinutes || 0) > 0;
   if (!fromPackage && customer.wallet < s.ratePerMin) return false;
   const earning = (fromPackage ? PACKAGE_MINUTE_VALUE : s.ratePerMin) * ASTROLOGER_SHARE;
   if (fromPackage) {
@@ -692,14 +693,19 @@ app.post('/sessions', auth('customer'), h((req) => {
   if (data.sessions.some((s) => s.customerId === c.id && ['active', 'requested'].includes(s.status))) {
     fail(409, 'You already have a chat in progress');
   }
-  const affordable = (c.packageMinutes || 0) + Math.floor(c.wallet / a.ratePerMin);
+  // Apps from before the choice send no payWith: keep the old behaviour (package first).
+  const payWith = req.body.payWith === 'wallet' ? 'wallet' : 'package';
+  const walletMinutes = Math.floor(c.wallet / a.ratePerMin);
+  const affordable = (payWith === 'package' ? c.packageMinutes || 0 : 0) + walletMinutes;
   if (affordable < MIN_START_MINUTES) {
-    fail(402, `You need at least ${MIN_START_MINUTES} minutes: ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet or a minutes package`);
+    fail(402, payWith === 'wallet'
+      ? `You need at least ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet for ${MIN_START_MINUTES} minutes${c.packageMinutes ? ', or pay with your package minutes' : ''}`
+      : `You need at least ${MIN_START_MINUTES} minutes: ₹${a.ratePerMin * MIN_START_MINUTES} in your wallet or a minutes package`);
   }
 
   const s = {
     id: db.id(), kind, customerId: c.id, astrologerId: a.id, status: 'requested',
-    ratePerMin: a.ratePerMin, requestedAt: db.now(), startedAt: null, endedAt: null,
+    ratePerMin: a.ratePerMin, payWith, requestedAt: db.now(), startedAt: null, endedAt: null,
     billedMinutes: 0, amount: 0, astrologerEarning: 0, endReason: null, reviewed: false,
     topic: String(req.body.topic || '').slice(0, 200),
   };

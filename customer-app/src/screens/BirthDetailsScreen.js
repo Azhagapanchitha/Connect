@@ -35,6 +35,9 @@ export default function BirthDetailsScreen({ route, navigation }) {
     birthTime: user.birthTime || '',
     birthPlace: user.birthPlace || '',
   });
+  // With package minutes left the customer picks how to pay; the package is the default, as it's prepaid.
+  const packageMinutes = user.packageMinutes || 0;
+  const [payWith, setPayWith] = useState(packageMinutes > 0 ? 'package' : 'wallet');
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
@@ -47,7 +50,7 @@ export default function BirthDetailsScreen({ route, navigation }) {
     setBusy(true);
     try {
       await updateProfile({ ...form, name: form.name.trim(), birthDate: dmyToIso(form.birthDate), birthPlace: form.birthPlace.trim() });
-      const session = await api('/sessions', { method: 'POST', body: { astrologerId, kind } });
+      const session = await api('/sessions', { method: 'POST', body: { astrologerId, kind, payWith } });
       navigation.replace('Chat', { sessionId: session.id });
     } catch (e) {
       if (e.status === 402) {
@@ -85,7 +88,28 @@ export default function BirthDetailsScreen({ route, navigation }) {
       <PlaceInput label="Place of birth" value={form.birthPlace} onChangeText={set('birthPlace')} placeholder="Town or city, state, country" />
       <Hint text={show('birthPlace')} />
 
-      <Button title={`Confirm & request ${kind === 'call' ? 'call' : 'chat'} · ${money(ratePerMin)}/min`} icon={kind === 'call' ? 'call' : 'chatbubbles'} onPress={submit} loading={busy} style={{ marginTop: 8 }} />
+      {packageMinutes > 0 ? (
+        <>
+          <Text style={{ fontSize: 13, color: colors.muted, marginBottom: 6, marginTop: 4, fontWeight: '600' }}>Pay with</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            <Chip label={`Package · ${packageMinutes} min left`} selected={payWith === 'package'} onPress={() => setPayWith('package')} />
+            <Chip label={`Wallet · ${money(user.wallet)}`} selected={payWith === 'wallet'} onPress={() => setPayWith('wallet')} />
+          </View>
+          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 17, marginBottom: 12 }}>
+            {payWith === 'package'
+              ? `Each minute uses 1 package minute. If they run out, the rest is charged from your wallet at ${money(ratePerMin)}/min.`
+              : `Charged from your wallet at ${money(ratePerMin)}/min. Your package minutes are kept for later.`}
+          </Text>
+        </>
+      ) : null}
+
+      <Button
+        title={`Confirm & request ${kind === 'call' ? 'call' : 'chat'} · ${payWith === 'package' ? 'package minutes' : `${money(ratePerMin)}/min`}`}
+        icon={kind === 'call' ? 'call' : 'chatbubbles'}
+        onPress={submit}
+        loading={busy}
+        style={{ marginTop: 8 }}
+      />
     </ScrollView>
   );
 }
