@@ -4,7 +4,7 @@ import { Alert } from '../alert';
 import { useAuth } from '../AuthContext';
 import { API_URL } from '../api';
 import { Avatar, Button, Card } from '../components/ui';
-import { colors, money, signLabel } from '../theme';
+import { colors, isoToDmy, money, signLabel } from '../theme';
 
 const Row = ({ label, value }) => (
   <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
@@ -25,7 +25,7 @@ export default function ProfileScreen({ navigation }) {
       </Card>
       <Card>
         <Row label="Gender" value={user.gender} />
-        <Row label="Date of birth" value={user.birthDate} />
+        <Row label="Date of birth" value={isoToDmy(user.birthDate)} />
         <Row label="Time of birth" value={user.birthTime} />
         <Row label="Place of birth" value={user.birthPlace} />
         <Row label="Zodiac sign" value={sg && `${sg.symbol} ${sg.label}`} />

@@ -36,6 +36,21 @@ export const signLabel = (key) => SIGNS.find((s) => s.key === key);
 
 export const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 
+// Birth dates are stored as YYYY-MM-DD but shown and typed as DD/MM/YYYY.
+export function isoToDmy(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso || '';
+}
+export function dmyToIso(dmy) {
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dmy || '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : dmy || '';
+}
+// Keeps only digits and inserts the slashes as the user types: "12041995" -> "12/04/1995".
+export function maskDmy(text) {
+  const d = text.replace(/\D/g, '').slice(0, 8);
+  return [d.slice(0, 2), d.slice(2, 4), d.slice(4)].filter(Boolean).join('/');
+}
+
 export function timeAgo(iso) {
   if (!iso) return '';
   const d = new Date(iso);

@@ -20,7 +20,7 @@ const { Server } = require('socket.io');
 const db = require('./db');
 const { daily, SIGNS } = require('./horoscope');
 const { seedIfEmpty } = require('./seed');
-const { chartFor } = require('./jathagam');
+const { chartFor, searchPlaces } = require('./jathagam');
 const { approvedAstrologer, isAllowed } = require('./approved');
 const { callsEnabled, callToken, closeRoom } = require('./calls');
 const { notify, isPushToken } = require('./push');
@@ -365,6 +365,16 @@ app.patch('/me', auth(), h((req) => {
 // ---------- content ----------
 
 app.get('/horoscope/:sign', h((req) => daily(req.params.sign) || fail(404, 'Unknown sign')));
+
+// Birth place suggestions while the customer types.
+app.get('/places', auth(), async (req, res) => {
+  try {
+    res.json(await searchPlaces(String(req.query.q || '').slice(0, 100)));
+  } catch (e) {
+    console.error(e);
+    res.status(502).json({ error: 'Place search is unavailable right now. You can still type the place.' });
+  }
+});
 
 // ---------- customer: browse astrologers ----------
 
