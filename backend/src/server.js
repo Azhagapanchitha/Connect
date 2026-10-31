@@ -1,8 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 
-// Auto-load .env file if present
-for (const envPath of [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '..', '.env')]) {
+// Auto-load .env and *.env files if present
+for (const envPath of [path.join(__dirname, '..', '.env'), path.join(__dirname, '..', '..', '.env'), path.join(__dirname, '..', 'cashfree.env'), path.join(__dirname, '..', 'livekit.env')]) {
   if (fs.existsSync(envPath)) {
     for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
       const match = line.match(/^\s*([\w.-]+)\s*=\s*(.*)?\s*$/);
