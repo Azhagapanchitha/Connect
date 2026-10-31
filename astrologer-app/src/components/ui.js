@@ -1,6 +1,7 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { API_URL } from '../api';
 import { colors } from '../theme';
 
 export function Button({ title, onPress, variant = 'primary', loading, disabled, icon, style, small }) {
@@ -45,13 +46,22 @@ export function Card({ children, style, onPress }) {
   return <Wrapper onPress={onPress} style={[styles.card, style]}>{children}</Wrapper>;
 }
 
-export function Avatar({ name = '?', color = colors.primary, size = 48, online }) {
+// photo is the server path of an astrologer's picture (e.g. /photos/abc.jpg); the initials show when
+// there is none or it fails to load.
+export function Avatar({ name = '?', color = colors.primary, size = 48, online, photo }) {
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?';
+  const [failed, setFailed] = useState(null);
+  const uri = photo ? (/^https?:/.test(photo) ? photo : `${API_URL}${photo}`) : null;
+  const circle = { width: size, height: size, borderRadius: size / 2 };
   return (
     <View style={{ width: size, height: size }}>
-      <View style={[styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: color }]}>
-        <Text style={{ color: '#fff', fontWeight: '700', fontSize: size * 0.38 }}>{initials}</Text>
-      </View>
+      {uri && failed !== uri ? (
+        <Image source={{ uri }} style={[circle, { backgroundColor: colors.primarySoft }]} onError={() => setFailed(uri)} />
+      ) : (
+        <View style={[styles.avatar, circle, { backgroundColor: color }]}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: size * 0.38 }}>{initials}</Text>
+        </View>
+      )}
       {online !== undefined ? (
         <View style={[styles.dot, { backgroundColor: online ? colors.success : '#9CA3AF', width: size * 0.28, height: size * 0.28, borderRadius: size * 0.14 }]} />
       ) : null}

@@ -42,6 +42,11 @@
   .badge.on { background: #DCFCE7; color: #166534; }
   .badge.wait { background: #FEF3C7; color: #92400E; }
   .muted { color: var(--muted); }
+  .photo-field { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .avatar { width: 72px; height: 72px; border-radius: 50%; object-fit: cover; background: var(--soft); color: var(--primary-dark); display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 24px; flex-shrink: 0; }
+  .avatar.sm { width: 36px; height: 36px; font-size: 13px; }
+  .file-btn { position: relative; overflow: hidden; display: inline-block; }
+  .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
   .confirm { background: #FEF2F2; border: 1px solid #FECACA; border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 14px; }
   [hidden] { display: none !important; }
 </style>
@@ -103,6 +108,15 @@
             <div class="hint">Separate with commas.</div>
           </div>
           <div class="full">
+            <label>Photo</label>
+            <div class="photo-field">
+              <span id="f-preview" class="avatar">?</span>
+              <span class="file-btn"><button type="button" class="ghost small">Choose photo…</button><input id="f-photo" type="file" accept="image/jpeg,image/png,image/webp"></span>
+              <button id="f-photo-remove" type="button" class="danger small" hidden>Remove photo</button>
+            </div>
+            <div class="hint">A clear face photo works best. It is cropped to a square and shown in the customer app. Saved when you press the button below.</div>
+          </div>
+          <div class="full">
             <label for="f-bio">About (bio)</label>
             <textarea id="f-bio" maxlength="1000" placeholder="Short introduction customers will read."></textarea>
           </div>
@@ -119,7 +133,7 @@
       <div id="listMsg" class="msg err" hidden></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Mobile</th><th>Rate</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Name</th><th>Mobile</th><th>Rate</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -136,6 +150,66 @@
   try { token = sessionStorage.getItem(TOKEN_KEY); } catch (e) {}
   var editing = null; // phone being edited, or null for a new registration
   var removing = null;
+  var photo = { current: null, pending: null, remove: false }; // pending: resized data URL waiting to be saved
+
+  function initials(name) {
+    return (name || '?').split(' ').filter(Boolean).slice(0, 2).map(function (p) { return p[0]; }).join('').toUpperCase() || '?';
+  }
+  // An <img> for a photo, or a circle with initials when there is none (or it fails to load).
+  function avatarEl(src, name, cls) {
+    var fallback = function () { var s = document.createElement('span'); s.className = cls; s.textContent = initials(name); return s; };
+    if (!src) return fallback();
+    var img = document.createElement('img');
+    img.className = cls;
+    img.alt = '';
+    img.src = src;
+    img.onerror = function () { img.replaceWith(fallback()); };
+    return img;
+  }
+  function showPreview() {
+    var src = photo.pending || (!photo.remove && photo.current) || null;
+    var el = avatarEl(src, $('f-name').value, 'avatar');
+    el.id = 'f-preview';
+    $('f-preview').replaceWith(el);
+    $('f-photo-remove').hidden = !src;
+  }
+
+  // Centre-crop to a square and scale to 400px, so uploads are small whatever the camera produced.
+  function resize(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file);
+      var img = new Image();
+      img.onload = function () {
+        var side = Math.min(img.naturalWidth, img.naturalHeight);
+        var canvas = document.createElement('canvas');
+        canvas.width = canvas.height = Math.min(400, side);
+        canvas.getContext('2d').drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('That file could not be read as an image.')); };
+      img.src = url;
+    });
+  }
+
+  $('f-photo').addEventListener('change', async function () {
+    var file = this.files[0];
+    this.value = '';
+    if (!file) return;
+    try {
+      photo.pending = await resize(file);
+      photo.remove = false;
+      showPreview();
+    } catch (err) {
+      show($('formMsg'), err.message, 'err');
+    }
+  });
+  $('f-photo-remove').addEventListener('click', function () {
+    photo.pending = null;
+    photo.remove = Boolean(photo.current);
+    showPreview();
+  });
+  $('f-name').addEventListener('input', function () { if (!photo.pending && (photo.remove || !photo.current)) showPreview(); });
 
   function show(el, text, kind) {
     el.textContent = text || '';
@@ -234,6 +308,7 @@
     $('empty').hidden = list.length > 0;
     list.forEach(function (a) {
       var tr = document.createElement('tr');
+      cell(tr, avatarEl(a.photo, a.name, 'avatar sm'));
       cell(tr, a.name);
       cell(tr, a.phone);
       cell(tr, a.ratePerMin == null ? '—' : '₹' + a.ratePerMin + '/min');
@@ -258,6 +333,8 @@
     $('f-skills').value = a.skills.join(', ');
     $('f-langs').value = a.languages.join(', ');
     $('f-bio').value = a.bio || '';
+    photo = { current: a.photo, pending: null, remove: false };
+    showPreview();
     $('formTitle').textContent = 'Edit ' + a.name;
     $('saveBtn').textContent = 'Save changes';
     $('cancelEdit').hidden = false;
@@ -269,6 +346,8 @@
     editing = null;
     $('astroForm').reset();
     $('f-phone').readOnly = false;
+    photo = { current: null, pending: null, remove: false };
+    showPreview();
     $('formTitle').textContent = 'Register an astrologer';
     $('saveBtn').textContent = 'Register astrologer';
     $('cancelEdit').hidden = true;
@@ -285,9 +364,18 @@
         skills: $('f-skills').value, languages: $('f-langs').value, bio: $('f-bio').value,
       });
       var a = r.astrologer;
-      show($('formMsg'), r.created
+      // The photo goes up after the details, since the account must exist first.
+      var photoNote = '';
+      try {
+        if (photo.pending) await call('PUT', '/admin/astrologers/' + a.phone + '/photo', { image: photo.pending });
+        else if (photo.remove) await call('DELETE', '/admin/astrologers/' + a.phone + '/photo');
+      } catch (err) {
+        if (err.message === 'signed out') throw err;
+        photoNote = ' The photo was not saved: ' + err.message;
+      }
+      show($('formMsg'), (r.created
         ? a.name + ' is registered. They can now sign in to the JothidaConnect Partner app with ' + a.phone + '.'
-        : a.name + ' is updated.', 'ok');
+        : a.name + ' is updated.') + photoNote, photoNote ? 'err' : 'ok');
       resetForm();
       load();
     } catch (err) {
@@ -302,7 +390,7 @@
     if (removing) removing.remove();
     var row = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 7;
+    td.colSpan = 8;
     var box = document.createElement('div');
     box.className = 'confirm';
     box.appendChild(document.createTextNode('Remove ' + a.name + "'s access? They are signed out and hidden from customers. Their history is kept, and you can register the number again later. "));

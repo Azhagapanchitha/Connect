@@ -33,7 +33,7 @@ export default function AstrologerScreen({ route, navigation }) {
     <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
         <Card style={{ alignItems: 'center' }}>
-          <Avatar name={a.name} color={a.avatarColor} size={88} online={available} />
+          <Avatar name={a.name} color={a.avatarColor} photo={a.photo} size={88} online={available} />
           <Text style={s.name}>{a.name}</Text>
           <Text style={s.meta}>{a.skills.join(' · ')}</Text>
           <View style={[s.row, { marginTop: 8 }]}>

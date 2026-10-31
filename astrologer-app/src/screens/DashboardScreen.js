@@ -52,7 +52,7 @@ export default function DashboardScreen({ navigation }) {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}
     >
       <Card style={[s.row, { backgroundColor: online ? '#DCFCE7' : '#fff' }]}>
-        <Avatar name={user.name} color={user.avatarColor} size={52} online={online} />
+        <Avatar name={user.name} color={user.avatarColor} photo={user.photo} size={52} online={online} />
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.name}>{user.name}</Text>
           <Text style={{ color: online ? colors.success : colors.muted, fontWeight: '600' }}>

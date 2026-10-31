@@ -38,7 +38,7 @@ export default function ChatsScreen({ navigation }) {
         const amount = ROLE === 'customer' ? item.amount : item.astrologerEarning;
         return (
           <Card onPress={() => navigation.navigate('Chat', { sessionId: item.id })} style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Avatar name={other?.name} color={other?.avatarColor || colors.primary} size={46} />
+            <Avatar name={other?.name} color={other?.avatarColor || colors.primary} photo={other?.photo} size={46} />
             <View style={{ flex: 1, marginLeft: 12 }}>
               <Text style={{ fontWeight: '700', fontSize: 15, color: colors.text }}>{other?.name || 'Unknown'}</Text>
               <Text style={{ color: colors.muted, fontSize: 13, marginTop: 2 }}>
