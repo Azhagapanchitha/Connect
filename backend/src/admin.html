@@ -127,6 +127,11 @@
             <input id="f-rate" type="number" min="1" max="1000" step="1" value="20" required>
           </div>
           <div>
+            <label for="f-share">Astrologer share (%)</label>
+            <input id="f-share" type="number" min="0" max="100" step="0.5" value="70" required>
+            <div class="hint" id="f-share-hint">They earn this % of each billed minute; JothidaConnect keeps the rest. Applies to new chats and calls.</div>
+          </div>
+          <div>
             <label for="f-exp">Experience (years)</label>
             <input id="f-exp" type="number" min="0" max="80" step="1" value="0">
           </div>
@@ -166,7 +171,7 @@
       <div id="listMsg" class="msg err" hidden></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th></th><th>Name</th><th>Mobile</th><th>Rate</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Name</th><th>Mobile</th><th>Rate</th><th>Share</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -444,6 +449,7 @@
       cell(tr, a.name);
       cell(tr, a.phone);
       cell(tr, a.ratePerMin == null ? '—' : '₹' + a.ratePerMin + '/min');
+      cell(tr, a.sharePercent + '%');
       cell(tr, a.skills.join(', ') || '—');
       cell(tr, a.languages.join(', ') || '—');
       cell(tr, a.online ? badge('Online', 'on') : a.signedUp ? badge('Signed in') : badge('Not signed in yet', 'wait'));
@@ -462,6 +468,8 @@
     $('f-name').value = a.name;
     $('f-rate').value = a.ratePerMin == null ? 20 : a.ratePerMin;
     $('f-exp').value = a.experienceYears || 0;
+    $('f-share').value = a.sharePercent;
+    shareHint();
     $('f-skills').value = a.skills.join(', ');
     $('f-langs').value = a.languages.join(', ');
     $('f-bio').value = a.bio || '';
@@ -478,6 +486,7 @@
     editing = null;
     $('astroForm').reset();
     $('f-phone').readOnly = false;
+    shareHint();
     photo = { current: null, pending: null, remove: false };
     showPreview();
     $('formTitle').textContent = 'Register an astrologer';
@@ -486,13 +495,27 @@
   }
   $('cancelEdit').addEventListener('click', function () { resetForm(); show($('formMsg'), ''); });
 
+  // Spell out what the share means per minute at the rate entered, e.g. "₹30/min → astrologer ₹21, JothidaConnect ₹9".
+  function shareHint() {
+    var rate = Number($('f-rate').value), share = Number($('f-share').value);
+    var base = 'They earn this % of each billed minute; JothidaConnect keeps the rest. Applies to new chats and calls.';
+    if (rate > 0 && share >= 0 && share <= 100) {
+      var theirs = Math.round(rate * share) / 100;
+      base += ' At ₹' + rate + '/min: astrologer ₹' + theirs + ', JothidaConnect ₹' + (Math.round((rate - theirs) * 100) / 100) + ' per minute.';
+    }
+    $('f-share-hint').textContent = base;
+  }
+  $('f-rate').addEventListener('input', shareHint);
+  $('f-share').addEventListener('input', shareHint);
+  shareHint();
+
   $('astroForm').addEventListener('submit', async function (e) {
     e.preventDefault();
     $('saveBtn').disabled = true;
     show($('formMsg'), '');
     try {
       var r = await call('POST', '/admin/astrologers', {
-        phone: $('f-phone').value, name: $('f-name').value, ratePerMin: $('f-rate').value, experienceYears: $('f-exp').value,
+        phone: $('f-phone').value, name: $('f-name').value, ratePerMin: $('f-rate').value, sharePercent: $('f-share').value, experienceYears: $('f-exp').value,
         skills: $('f-skills').value, languages: $('f-langs').value, bio: $('f-bio').value,
       });
       var a = r.astrologer;
@@ -522,7 +545,7 @@
     if (removing) removing.remove();
     var row = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 8;
+    td.colSpan = 9;
     var box = document.createElement('div');
     box.className = 'confirm';
     box.appendChild(document.createTextNode('Remove ' + a.name + "'s access? They are signed out and hidden from customers. Their history is kept, and you can register the number again later. "));

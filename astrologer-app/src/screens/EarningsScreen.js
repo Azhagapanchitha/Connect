@@ -47,7 +47,7 @@ export default function EarningsScreen() {
           <Card style={{ backgroundColor: colors.primaryDark }}>
             <Text style={{ color: '#FDE6C8' }}>Available to withdraw</Text>
             <Text style={{ color: '#fff', fontSize: 34, fontWeight: '800', marginTop: 4 }}>{money(user.earnings)}</Text>
-            <Text style={{ color: '#FDE6C8', fontSize: 12, marginTop: 6 }}>Your share is 70% of each billed minute.</Text>
+            <Text style={{ color: '#FDE6C8', fontSize: 12, marginTop: 6 }}>Your share is {user.sharePercent ?? 70}% of each billed minute.</Text>
           </Card>
           <SectionTitle>Withdraw</SectionTitle>
           <Input placeholder="Amount (min ₹100)" keyboardType="number-pad" value={amount} onChangeText={setAmount} />

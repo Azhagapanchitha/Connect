@@ -49,7 +49,7 @@ export default function ProfileSetupScreen({ navigation }) {
         {LANGUAGES.map((l) => <Chip key={l} label={l} selected={languages.includes(l)} onPress={() => setLanguages(toggle(languages, l))} />)}
       </View>
       <Input label="Experience (years)" value={experienceYears} onChangeText={setExp} keyboardType="number-pad" maxLength={2} />
-      <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 20 }}>Your rate is set by the JothidaConnect admin. You keep 70% of every minute billed. Payouts can be withdrawn from the Earnings tab.</Text>
+      <Text style={{ color: colors.muted, fontSize: 12, marginBottom: 20 }}>Your rate and share are set by the JothidaConnect admin. You keep {user.sharePercent ?? 70}% of every minute billed. Payouts can be withdrawn from the Earnings tab.</Text>
       <Button title="Save profile" onPress={save} loading={busy} />
     </ScrollView>
   );

@@ -32,7 +32,7 @@ const PORT = process.env.PORT || 4000;
 const DEV_OTP = '1234';                 // Astrologers sign in with this; customers use a password
 // When CUSTOMER_PASSWORD_ONLY=1, customers can no longer use the 1234 code (only mobile number + password).
 const CUSTOMER_PASSWORD_ONLY = process.env.CUSTOMER_PASSWORD_ONLY === '1';
-const ASTROLOGER_SHARE = 0.7;           // Astrologer keeps 70% of each minute billed
+const DEFAULT_SHARE_PERCENT = 70;       // Astrologer keeps this % of each minute billed, unless the admin sets their own
 const MIN_START_MINUTES = 5;            // Customer needs balance for this many minutes to start a chat or call
 const REQUEST_TIMEOUT_MS = 60 * 1000;   // Unanswered requests expire after a minute
 const BILLING_INTERVAL_MS = Number(process.env.BILLING_INTERVAL_MS) || 60 * 1000;
@@ -57,9 +57,12 @@ const round2 = (n) => Math.round(n * 100) / 100;
 
 function publicAstrologer(a) {
   const busy = data.sessions.some((s) => s.astrologerId === a.id && s.status === 'active');
-  const { phone, earnings, pushTokens, ...rest } = a;
+  const { phone, earnings, pushTokens, sharePercent, ...rest } = a;
   return { ...rest, busy };
 }
+
+// The % of each billed minute an astrologer keeps: set per astrologer on the admin page, else the default.
+const sharePercentOf = (a) => (typeof a?.sharePercent === 'number' ? a.sharePercent : DEFAULT_SHARE_PERCENT);
 
 function publicCustomer(c) {
   const { phone, wallet, passwordHash, resetPassword, ...rest } = c;
@@ -67,13 +70,15 @@ function publicCustomer(c) {
 }
 
 // The owner sees their own record, minus secrets.
-const selfView = ({ passwordHash, resetPassword, ...u }) => u;
+// An astrologer always sees their effective share, even when it's the default.
+const selfView = ({ passwordHash, resetPassword, ...u }) => (u.role === 'astrologer' ? { ...u, sharePercent: sharePercentOf(u) } : u);
 
 function sessionView(s) {
   const customer = findUser(s.customerId);
   const astrologer = findUser(s.astrologerId);
+  const { sharePercent, ...rest } = s; // sessions go to the customer too; the share stays private
   return {
-    ...s,
+    ...rest,
     kind: s.kind || 'chat',
     customer: customer && { id: customer.id, name: customer.name, sign: customer.sign, birthDate: customer.birthDate, birthTime: customer.birthTime, birthPlace: customer.birthPlace, gender: customer.gender },
     astrologer: astrologer && { id: astrologer.id, name: astrologer.name, avatarColor: astrologer.avatarColor, photo: astrologer.photo, ratePerMin: astrologer.ratePerMin },
@@ -152,7 +157,9 @@ function billMinute(s) {
   const astrologer = findUser(s.astrologerId);
   const fromPackage = s.payWith !== 'wallet' && (customer.packageMinutes || 0) > 0;
   if (!fromPackage && customer.wallet < s.ratePerMin) return false;
-  const earning = (fromPackage ? PACKAGE_MINUTE_VALUE : s.ratePerMin) * ASTROLOGER_SHARE;
+  // The share is fixed when the consultation is requested; older sessions fall back to the astrologer's current share.
+  const share = (s.sharePercent ?? sharePercentOf(astrologer)) / 100;
+  const earning = round2((fromPackage ? PACKAGE_MINUTE_VALUE : s.ratePerMin) * share);
   if (fromPackage) {
     customer.packageMinutes -= 1;
     s.packageMinutesUsed = (s.packageMinutesUsed || 0) + 1;
@@ -737,7 +744,7 @@ app.post('/sessions', auth('customer'), h((req) => {
 
   const s = {
     id: db.id(), kind, customerId: c.id, astrologerId: a.id, status: 'requested',
-    ratePerMin: a.ratePerMin, payWith, requestedAt: db.now(), startedAt: null, endedAt: null,
+    ratePerMin: a.ratePerMin, sharePercent: sharePercentOf(a), payWith, requestedAt: db.now(), startedAt: null, endedAt: null,
     billedMinutes: 0, amount: 0, astrologerEarning: 0, endReason: null, reviewed: false,
     topic: String(req.body.topic || '').slice(0, 200),
   };
@@ -892,6 +899,7 @@ function adminAstrologerView({ phone, name }) {
     online: Boolean(a?.online),
     ratePerMin: a?.ratePerMin ?? null,
     experienceYears: a?.experienceYears ?? 0,
+    sharePercent: a ? sharePercentOf(a) : DEFAULT_SHARE_PERCENT,
     skills: a?.skills || [],
     languages: a?.languages || [],
     bio: a?.bio || '',
@@ -915,11 +923,14 @@ app.post('/admin/astrologers', adminAuth, h((req) => {
   if (!(ratePerMin >= 1 && ratePerMin <= 1000)) fail(400, 'Rate must be between ₹1 and ₹1000 per minute.');
   const experienceYears = Math.round(Number(b.experienceYears) || 0);
   if (experienceYears < 0 || experienceYears > 80) fail(400, 'Experience must be between 0 and 80 years.');
+  // Left out (older admin page): keep what the astrologer has.
+  const sharePercent = b.sharePercent === undefined || b.sharePercent === '' ? undefined : Math.round(Number(b.sharePercent) * 10) / 10;
+  if (sharePercent !== undefined && !(sharePercent >= 0 && sharePercent <= 100)) fail(400, 'Share must be between 0% and 100%.');
 
   const existing = findAstrologer(phone);
   const a = existing || newAstrologer(phone);
   Object.assign(a, {
-    name, ratePerMin: round2(ratePerMin), experienceYears,
+    name, ratePerMin: round2(ratePerMin), experienceYears, ...(sharePercent !== undefined ? { sharePercent } : {}),
     skills: list(b.skills, 40), languages: list(b.languages, 30), bio: str(b.bio, 1000),
   });
   if (!existing) data.users.push(a);
