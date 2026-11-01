@@ -51,8 +51,9 @@ function placement(name, short, siderealLon, extra = {}) {
   const navamsa = Math.floor((siderealLon * 9) / 30) % 12;
   return {
     name, short, lon: Math.round(siderealLon * 100) / 100,
-    rasi, rasiName: RASIS[rasi], rasiEn: RASI_EN[rasi], degInRasi: Math.round((siderealLon % 30) * 100) / 100,
-    navamsa, navamsaName: RASIS[navamsa],
+    // Degrees within the sign to 0.0001° (well under an arc-minute), so the app can show degree° minute′.
+    rasi, rasiName: RASIS[rasi], rasiEn: RASI_EN[rasi], degInRasi: Math.round((siderealLon % 30) * 10000) / 10000,
+    navamsa, navamsaName: RASIS[navamsa], degInNavamsa: Math.round(((siderealLon * 9) % 30) * 10000) / 10000,
     nakshatra: NAKSHATRAS[nak], pada: Math.floor((siderealLon % NAK_SPAN) / (NAK_SPAN / 4)) + 1, ...extra,
   };
 }

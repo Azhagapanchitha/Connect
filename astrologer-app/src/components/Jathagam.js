@@ -28,6 +28,7 @@ const TEXT = {
     rasi: 'Rasi', nakshatra: 'Nakshatra', lagna: 'Lagna', pada: (n) => `pada ${n}`,
     charts: { rasi: 'Rasi', navamsa: 'Navamsam' }, chart: (name) => `${name} chart`,
     legend: 'La Lagna · Su Sun · Mo Moon · Ma Mars · Me Mercury · Ju Jupiter · Ve Venus · Sa Saturn · Ra Rahu · Ke Ketu · ᴿ retrograde',
+    positions: 'Planet positions', colPlanet: 'Planet', colSign: { rasi: 'Rasi', navamsa: 'Navamsam' }, colDeg: 'Degree', colStar: 'Star · pada',
     dasaTitle: 'Dasa / Bhukti', dasa: (lord) => `${lord} dasa`,
     balance: (lord, yrs) => `Balance at birth: ${lord} dasa ${yrs} yrs`,
     running: (d, b, till) => `Now running: ${d} dasa · ${b} bhukti (till ${till})`,
@@ -48,6 +49,7 @@ const TEXT = {
     rasi: 'ராசி', nakshatra: 'நட்சத்திரம்', lagna: 'லக்னம்', pada: (n) => `${n}ம் பாதம்`,
     charts: { rasi: 'ராசி', navamsa: 'நவாம்சம்' }, chart: (name) => `${name} கட்டம்`,
     legend: 'ல லக்னம் · சூ சூரியன் · சந் சந்திரன் · செ செவ்வாய் · பு புதன் · கு குரு · சு சுக்கிரன் · சனி சனி · ரா ராகு · கே கேது · (வ) வக்ரம்',
+    positions: 'கிரக ஸ்புடம்', colPlanet: 'கிரகம்', colSign: { rasi: 'ராசி', navamsa: 'நவாம்சம்' }, colDeg: 'பாகை', colStar: 'நட்சத்திரம் · பாதம்',
     dasaTitle: 'திசை / புக்தி', dasa: (lord) => `${lord} திசை`,
     balance: (lord, yrs) => `பிறப்பில் திசை இருப்பு: ${lord} திசை ${yrs} ஆண்டுகள்`,
     running: (d, b, till) => `தற்போது: ${d} திசை · ${b} புக்தி (${till} வரை)`,
@@ -63,6 +65,14 @@ const fmtDate = (iso) => {
 };
 const isNow = (p, now) => new Date(p.start) <= now && now < new Date(p.end);
 const rasiText = (t, i) => (t.rasiEn ? `${t.rasis[i]} (${t.rasiEn[i]})` : t.rasis[i]);
+// Degrees within a sign as 27°52′ (null when the server didn't send it, e.g. navamsa from an older server).
+const DEG_FIELD = { rasi: 'degInRasi', navamsa: 'degInNavamsa' };
+function dms(x) {
+  if (typeof x !== 'number') return null;
+  const total = Math.min(Math.floor(x * 60), 30 * 60 - 1); // whole arc-minutes, never rounding up to 30°00′
+  return `${Math.floor(total / 60)}°${String(total % 60).padStart(2, '0')}′`;
+}
+const wholeDeg = (x) => (typeof x === 'number' ? `${Math.floor(x)}°` : '');
 const starText = (t, name) => t.nakshatras[NAKSHATRAS_EN.indexOf(name)] || name;
 
 function Row({ label, value }) {
@@ -87,7 +97,7 @@ function BasicDetails({ c, chart }) {
         <>
           <Row label={t.rasi} value={rasiText(t, chart.rasi.index)} />
           <Row label={t.nakshatra} value={`${starText(t, chart.nakshatra.name)}, ${t.pada(chart.nakshatra.pada)}`} />
-          <Row label={t.lagna} value={chart.lagna && `${rasiText(t, chart.lagna.rasi)} ${chart.lagna.degInRasi.toFixed(1)}°`} />
+          <Row label={t.lagna} value={chart.lagna && `${rasiText(t, chart.lagna.rasi)} ${dms(chart.lagna.degInRasi)}`} />
         </>
       ) : null}
     </View>
@@ -127,13 +137,13 @@ function BirthChart({ chart, birthDate }) {
           return (
             <View key={i} style={[s.cell, { top: `${row * 25}%`, left: `${col * 25}%` }, chart.lagna?.[field] === i && s.lagnaCell]}>
               <Text style={s.cellSign} numberOfLines={1} adjustsFontSizeToFit>{t.rasis[i]}</Text>
-              <Text style={s.cellPlanets}>
-                {list.map((p, k) => (
-                  <Text key={p.name} style={p.isLagna ? s.lagnaText : null}>
-                    {k ? ' ' : ''}{t.short[p.name] || p.short}{p.retro && !['Rahu', 'Ketu'].includes(p.name) ? t.retro : ''}
-                  </Text>
-                ))}
-              </Text>
+              {/* One body per line with its whole degree in the sign; minutes are in the table below. */}
+              {list.map((p) => (
+                <Text key={p.name} style={[s.cellPlanet, p.isLagna && s.lagnaText]} numberOfLines={1} adjustsFontSizeToFit>
+                  {t.short[p.name] || p.short}{p.retro && !['Rahu', 'Ketu'].includes(p.name) ? t.retro : ''}
+                  <Text style={s.cellDeg}> {wholeDeg(p[DEG_FIELD[field]])}</Text>
+                </Text>
+              ))}
             </View>
           );
         })}
@@ -143,6 +153,35 @@ function BirthChart({ chart, birthDate }) {
         </View>
       </View>
       <Text style={s.legend}>{t.legend}</Text>
+      <PlanetTable chart={chart} field={field} />
+    </View>
+  );
+}
+
+// Lagna and every planet with sign, degree° minute′ in that sign and (for the rasi chart) star and pada.
+function PlanetTable({ chart, field }) {
+  const t = useText();
+  const rows = [...(chart.lagna ? [{ ...chart.lagna, isLagna: true }] : []), ...chart.planets];
+  const showStar = field === 'rasi';
+  return (
+    <View style={s.table}>
+      <Text style={[s.title, { fontSize: 13, marginBottom: 4 }]}>{t.positions}</Text>
+      <View style={[s.tr, s.th]}>
+        <Text style={[s.td, s.colPlanet, s.thText]}>{t.colPlanet}</Text>
+        <Text style={[s.td, s.colSign, s.thText]}>{t.colSign[field]}</Text>
+        <Text style={[s.td, s.colDeg, s.thText]}>{t.colDeg}</Text>
+        {showStar ? <Text style={[s.td, s.colStar, s.thText]}>{t.colStar}</Text> : null}
+      </View>
+      {rows.map((p) => (
+        <View key={p.name} style={s.tr}>
+          <Text style={[s.td, s.colPlanet, p.isLagna && s.lagnaText]} numberOfLines={1}>
+            {p.isLagna ? t.lagna : t.lords[p.name] || p.name}{p.retro && !['Rahu', 'Ketu'].includes(p.name) ? ` ${t.retro}` : ''}
+          </Text>
+          <Text style={[s.td, s.colSign]} numberOfLines={1}>{t.rasis[p[field]]}</Text>
+          <Text style={[s.td, s.colDeg]}>{dms(p[DEG_FIELD[field]]) || '—'}</Text>
+          {showStar ? <Text style={[s.td, s.colStar]} numberOfLines={1}>{starText(t, p.nakshatra)} · {p.pada}</Text> : null}
+        </View>
+      ))}
     </View>
   );
 }
@@ -225,10 +264,20 @@ const s = StyleSheet.create({
   tabText: { fontSize: 12, fontWeight: '600', color: colors.primaryDark },
   tabTextOn: { color: '#fff' },
   chart: { width: '100%', maxWidth: 360, aspectRatio: 1, alignSelf: 'center', borderWidth: 1, borderColor: colors.primaryDark },
-  cell: { position: 'absolute', width: '25%', height: '25%', borderWidth: 0.5, borderColor: colors.primaryDark, padding: 3 },
+  cell: { position: 'absolute', width: '25%', height: '25%', borderWidth: 0.5, borderColor: colors.primaryDark, padding: 3, overflow: 'hidden' },
   lagnaCell: { backgroundColor: colors.primarySoft },
   cellSign: { fontSize: 9, color: colors.muted },
-  cellPlanets: { fontSize: 13, color: colors.text, fontWeight: '700', marginTop: 2 },
+  cellPlanet: { fontSize: 12, color: colors.text, fontWeight: '700', lineHeight: 15 },
+  cellDeg: { fontSize: 10, color: colors.muted, fontWeight: '400' },
+  table: { marginTop: 12, borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 10 },
+  tr: { flexDirection: 'row', paddingVertical: 4, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  th: { borderBottomWidth: 1 },
+  td: { fontSize: 12, color: colors.text, paddingRight: 6 },
+  thText: { color: colors.muted, fontWeight: '600' },
+  colPlanet: { flex: 1.3 },
+  colSign: { flex: 1.3 },
+  colDeg: { flex: 1, fontVariant: ['tabular-nums'] },
+  colStar: { flex: 1.8 },
   lagnaText: { color: colors.danger },
   center: { position: 'absolute', top: '25%', left: '25%', width: '50%', height: '50%', alignItems: 'center', justifyContent: 'center' },
   centerTitle: { fontSize: 18, fontWeight: '700', color: colors.primaryDark },
