@@ -893,7 +893,19 @@ const findAstrologer = (phone) => data.users.find((u) => u.role === 'astrologer'
 
 function adminAstrologerView({ phone, name }) {
   const a = findAstrologer(phone);
+  // Earned: credits from chats and calls. Withdrawn: payout requests made in the Partner app, which are only
+  // recorded there, so the admin pays them by bank transfer.
+  let earned = 0;
+  let withdrawn = 0;
+  if (a) {
+    for (const t of data.transactions) {
+      if (t.userId !== a.id) continue;
+      if (t.type === 'credit') earned += t.amount;
+      else if (t.type === 'payout') withdrawn -= t.amount;
+    }
+  }
   return {
+    balance: round2(a?.earnings || 0), earned: round2(earned), withdrawn: round2(withdrawn),
     phone, name,
     signedUp: Boolean(a && Object.values(data.tokens).includes(a.id)), // has signed in to the Partner app
     online: Boolean(a?.online),

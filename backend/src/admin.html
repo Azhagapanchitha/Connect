@@ -38,6 +38,8 @@
   th { text-align: left; color: var(--muted); font-size: 12px; font-weight: 600; padding: 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
   td { padding: 9px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
   td.actions { white-space: nowrap; text-align: right; }
+  td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.strong { font-weight: 700; }
   .badge { display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--primary-dark); white-space: nowrap; }
   .badge.on { background: #DCFCE7; color: #166534; }
   .badge.wait { background: #FEF3C7; color: #92400E; }
@@ -168,10 +170,11 @@
 
     <div class="card">
       <h2>Registered astrologers <span id="count" class="muted" style="font-weight:400"></span></h2>
+      <p id="totals" class="muted" style="margin-top:-4px"></p>
       <div id="listMsg" class="msg err" hidden></div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th></th><th>Name</th><th>Mobile</th><th>Rate</th><th>Share</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Name</th><th>Mobile</th><th>Rate</th><th>Share</th><th title="Current earnings, as on their Earnings tab">Balance</th><th title="Total earned from chats and calls">Earned</th><th title="Withdrawals requested in the Partner app; pay these by bank transfer">Withdrawn</th><th>Skills</th><th>Languages</th><th>Status</th><th></th></tr></thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
@@ -406,6 +409,8 @@
     signedOut('');
   });
 
+  function rupees(n) { return '₹' + (Math.round((n || 0) * 100) / 100).toLocaleString('en-IN'); }
+
   function cell(tr, text, cls) {
     var td = document.createElement('td');
     if (cls) td.className = cls;
@@ -442,6 +447,10 @@
     var tbody = $('rows');
     tbody.textContent = '';
     $('count').textContent = '(' + list.length + ')';
+    var sum = function (k) { return list.reduce(function (s, a) { return s + (a[k] || 0); }, 0); };
+    $('totals').textContent = list.length
+      ? 'Total balance across astrologers: ' + rupees(sum('balance')) + ' · earned so far: ' + rupees(sum('earned')) + ' · withdrawn: ' + rupees(sum('withdrawn'))
+      : '';
     $('empty').hidden = list.length > 0;
     list.forEach(function (a) {
       var tr = document.createElement('tr');
@@ -450,6 +459,9 @@
       cell(tr, a.phone);
       cell(tr, a.ratePerMin == null ? '—' : '₹' + a.ratePerMin + '/min');
       cell(tr, a.sharePercent + '%');
+      cell(tr, rupees(a.balance), 'num strong');
+      cell(tr, rupees(a.earned), 'num');
+      cell(tr, a.withdrawn ? rupees(a.withdrawn) : '—', 'num');
       cell(tr, a.skills.join(', ') || '—');
       cell(tr, a.languages.join(', ') || '—');
       cell(tr, a.online ? badge('Online', 'on') : a.signedUp ? badge('Signed in') : badge('Not signed in yet', 'wait'));
@@ -545,7 +557,7 @@
     if (removing) removing.remove();
     var row = document.createElement('tr');
     var td = document.createElement('td');
-    td.colSpan = 9;
+    td.colSpan = 12;
     var box = document.createElement('div');
     box.className = 'confirm';
     box.appendChild(document.createTextNode('Remove ' + a.name + "'s access? They are signed out and hidden from customers. Their history is kept, and you can register the number again later. "));
