@@ -21,8 +21,23 @@ export default function AstrologerScreen({ route, navigation }) {
   }, [id]));
 
   // Birth details are confirmed on the next screen, which then sends the chat or call request.
+  // A customer without enough for the minimum minutes (package minutes count) is sent to recharge first;
+  // the server checks this again when the request is made.
   function start(kind) {
     if (!user.name) return navigation.navigate('EditProfile');
+    const minMinutes = a.minStartMinutes || 0;
+    const affordable = (user.packageMinutes || 0) + Math.floor((user.wallet || 0) / a.ratePerMin);
+    if (affordable < minMinutes) {
+      const needed = a.ratePerMin * minMinutes;
+      return Alert.alert(
+        'Recharge to continue',
+        `You need balance for at least ${minMinutes} minutes to ${kind === 'call' ? 'call' : 'chat with'} ${a.name}: ${money(needed)} at ${money(a.ratePerMin)}/min. Your wallet has ${money(user.wallet)}${user.packageMinutes ? ` and ${user.packageMinutes} package min` : ''}.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Recharge', onPress: () => navigation.navigate('Tabs', { screen: 'Wallet' }) },
+        ],
+      );
+    }
     navigation.navigate('BirthDetails', { astrologerId: id, astrologerName: a.name, ratePerMin: a.ratePerMin, kind });
   }
 

@@ -19,7 +19,7 @@ Astrologer app ─REST + WebSocket─┘
 ```
 
 1. The customer signs in with their phone and an OTP, then fills in their birth details and zodiac sign.
-2. The customer picks an online astrologer and taps **Chat**. They need enough wallet balance for 3 minutes at that astrologer's rate.
+2. The customer picks an online astrologer and taps **Chat**. They need enough wallet balance (or package minutes) for 5 minutes at that astrologer's rate.
 3. The astrologer gets a pop-up and accepts or declines. Requests nobody answers expire after 60 seconds.
 4. Once the chat starts, the customer is billed each minute (the first minute is charged up front). The astrologer earns **70%** of each minute. If the wallet runs out, the chat ends automatically.
 5. Either side can end the chat. The customer can then rate the astrologer and leave a review.
