@@ -4,10 +4,12 @@ import { Alert } from '../alert';
 import { useFocusEffect } from '@react-navigation/native';
 import { api } from '../api';
 import { useAuth } from '../AuthContext';
-import { Button, Card, Chip, SectionTitle } from '../components/ui';
+import { Button, Card, Chip, Input, SectionTitle } from '../components/ui';
 import { colors, money, timeAgo } from '../theme';
 
 const AMOUNTS = [100, 200, 500, 1000, 2000];
+const MIN_RECHARGE = 50; // same limits as the server's /wallet/cashfree/order
+const MAX_RECHARGE = 50000;
 
 let cashfreeSdkPromise = null;
 function loadCashfreeSdk() {
@@ -39,6 +41,10 @@ export default function WalletScreen({ navigation }) {
   const { user, setUser } = useAuth();
   const [txs, setTxs] = useState([]);
   const [amount, setAmount] = useState(500);
+  // Text in the "enter an amount" box; empty while a preset chip is chosen.
+  const [typed, setTyped] = useState('');
+  const amountProblem = amount < MIN_RECHARGE ? `Enter at least ${money(MIN_RECHARGE)}`
+    : amount > MAX_RECHARGE ? `You can add up to ${money(MAX_RECHARGE)} at a time` : null;
   const [busy, setBusy] = useState(false);
   const [packages, setPackages] = useState([]);
   const [buying, setBuying] = useState(null);
@@ -56,6 +62,7 @@ export default function WalletScreen({ navigation }) {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   async function recharge() {
+    if (amountProblem) return Alert.alert('Check the amount', amountProblem);
     setBusy(true);
     try {
       const order = await api('/wallet/cashfree/order', { method: 'POST', body: { amount } });
@@ -160,9 +167,22 @@ export default function WalletScreen({ navigation }) {
           ))}
           <SectionTitle>Add money</SectionTitle>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {AMOUNTS.map((a) => <Chip key={a} label={money(a)} selected={amount === a} onPress={() => setAmount(a)} />)}
+            {AMOUNTS.map((a) => <Chip key={a} label={money(a)} selected={!typed && amount === a} onPress={() => { setTyped(''); setAmount(a); }} />)}
           </View>
-          {gstRate ? (
+          <Input
+            label="Or enter an amount (₹)"
+            value={typed}
+            onChangeText={(t) => {
+              const digits = t.replace(/\D/g, '').replace(/^0+/, '').slice(0, 5);
+              setTyped(digits);
+              setAmount(Number(digits) || 0);
+            }}
+            placeholder={`${MIN_RECHARGE} – ${MAX_RECHARGE.toLocaleString('en-IN')}`}
+            keyboardType="number-pad"
+            maxLength={5}
+          />
+          {typed && amountProblem ? <Text style={{ color: colors.danger, fontSize: 12, marginTop: -8, marginBottom: 8 }}>{amountProblem}</Text> : null}
+          {gstRate && !amountProblem ? (
             <Card style={{ marginTop: 8, marginBottom: 0, paddingVertical: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ color: colors.muted }}>Recharge amount</Text>
@@ -179,7 +199,14 @@ export default function WalletScreen({ navigation }) {
               <Text style={{ color: colors.muted, fontSize: 12, marginTop: 6 }}>{money(amount)} is added to your wallet.</Text>
             </Card>
           ) : null}
-          <Button title={gstRate ? `Pay ${money(payable)}` : `Recharge ${money(amount)}`} icon="wallet" onPress={recharge} loading={busy} style={{ marginTop: 8 }} />
+          <Button
+            title={amountProblem ? 'Choose or enter an amount' : gstRate ? `Pay ${money(payable)}` : `Recharge ${money(amount)}`}
+            icon="wallet"
+            onPress={recharge}
+            loading={busy}
+            disabled={Boolean(amountProblem)}
+            style={{ marginTop: 8 }}
+          />
           <SectionTitle style={{ marginTop: 24 }}>Transactions</SectionTitle>
           {txs.length === 0 ? <Text style={{ color: colors.muted }}>No transactions yet.</Text> : null}
         </>
