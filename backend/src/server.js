@@ -33,7 +33,7 @@ const DEV_OTP = '1234';                 // Astrologers sign in with this; custom
 // When CUSTOMER_PASSWORD_ONLY=1, customers can no longer use the 1234 code (only mobile number + password).
 const CUSTOMER_PASSWORD_ONLY = process.env.CUSTOMER_PASSWORD_ONLY === '1';
 const ASTROLOGER_SHARE = 0.7;           // Astrologer keeps 70% of each minute billed
-const MIN_START_MINUTES = 3;            // Customer needs balance for this many minutes to start a chat
+const MIN_START_MINUTES = 5;            // Customer needs balance for this many minutes to start a chat or call
 const REQUEST_TIMEOUT_MS = 60 * 1000;   // Unanswered requests expire after a minute
 const BILLING_INTERVAL_MS = Number(process.env.BILLING_INTERVAL_MS) || 60 * 1000;
 // Prepaid minutes bought from the wallet; usable with any astrologer for chat or call, never expire.
@@ -411,7 +411,8 @@ app.get('/astrologers/:id', auth(), h((req) => {
     .slice(-20)
     .reverse()
     .map((r) => ({ ...r, customerName: findUser(r.customerId)?.name || 'Customer' }));
-  return { ...publicAstrologer(a), reviews, callsEnabled };
+  // minStartMinutes lets the app stop a customer who can't afford it before the birth-details step.
+  return { ...publicAstrologer(a), reviews, callsEnabled, minStartMinutes: MIN_START_MINUTES };
 }));
 
 // ---------- customer: wallet ----------
