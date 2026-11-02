@@ -8,6 +8,14 @@ import { Button, Input } from '../components/ui';
 import { APP_NAME, colors } from '../theme';
 
 const MIN_PASSWORD = 8;
+// Public pages served from customer-app/public; payment and app-store reviewers need these reachable before login.
+const POLICY_LINKS = [
+  ['About and Pricing', '/about.html'],
+  ['Contact Us', '/contact.html'],
+  ['Terms and Conditions', '/terms.html'],
+  ['Privacy Policy', '/privacy.html'],
+  ['Refund Policy', '/refund.html'],
+];
 
 // Accepts 98765 43210, +91 98765 43210 or 098765 43210; returns the 10 digits or null.
 function mobile10(raw) {
@@ -188,6 +196,13 @@ export default function LoginScreen() {
               </Text>
               <Text style={s.aboutClosing}>Your journey, your questions, your guidance.</Text>
             </View>
+            <View style={s.policyLinks}>
+              {POLICY_LINKS.map(([label, path]) => (
+                <Pressable key={path} onPress={() => Linking.openURL(`https://jothidaconnect.in${path}`).catch(() => {})} accessibilityRole="link">
+                  <Text style={s.policyLink}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -214,6 +229,8 @@ const s = StyleSheet.create({
   contactHeading: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 10 },
   contactDetail: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
   contactDetailText: { color: colors.primary, fontSize: 14 },
+  policyLinks: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, borderTopWidth: 1, borderTopColor: colors.border, marginTop: 16, paddingTop: 14 },
+  policyLink: { color: colors.primary, fontSize: 13, textDecorationLine: 'underline' },
   aboutLead: { color: colors.text, fontSize: 14, fontWeight: '600', lineHeight: 21, marginBottom: 10 },
   aboutText: { color: colors.muted, fontSize: 13, lineHeight: 20, marginBottom: 10 },
   aboutSubheading: { color: colors.text, fontSize: 14, fontWeight: '700', marginTop: 8, marginBottom: 8 },
