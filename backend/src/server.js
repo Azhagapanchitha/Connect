@@ -424,19 +424,9 @@ app.get('/astrologers/:id', auth(), h((req) => {
 
 // ---------- customer: wallet ----------
 
-// GST is charged on top of a recharge: the customer pays amount + 18% and the wallet gets the amount.
-// The server is the source of the rate; the app only shows it.
-const GST_RATE = 0.18;
-const rechargeBill = (amount) => {
-  const gst = round2(amount * GST_RATE);
-  return { amount, gst, total: round2(amount + gst) };
-};
-const paidNote = (bill) => `paid ₹${bill.total} incl. ₹${bill.gst} GST`;
-
 app.get('/wallet', auth(), h((req) => ({
   balance: req.user.role === 'customer' ? req.user.wallet : req.user.earnings,
   transactions: data.transactions.filter((t) => t.userId === req.user.id).reverse(),
-  ...(req.user.role === 'customer' ? { gstRate: GST_RATE } : {}),
 })));
 
 // Unpaid top-up for local development only. The apps use /wallet/cashfree/order; with Cashfree set up this
@@ -446,7 +436,7 @@ app.post('/wallet/recharge', auth('customer'), h((req) => {
   const amount = Number(req.body.amount);
   if (!(amount >= 50 && amount <= 50000)) fail(400, 'Recharge between ₹50 and ₹50,000');
   req.user.wallet = round2(req.user.wallet + amount);
-  addTransaction(req.user.id, 'recharge', amount, `Wallet recharge (Demo) · ${paidNote(rechargeBill(amount))}`);
+  addTransaction(req.user.id, 'recharge', amount, 'Wallet recharge (Demo)');
   save();
   emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
   return { balance: req.user.wallet };
@@ -463,15 +453,13 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
     return res.status(400).json({ message: 'Recharge between ₹50 and ₹50,000' });
   }
 
-  const bill = rechargeBill(amount);
-
   if (!cashfree.isConfigured()) {
     // Development demo flow when API credentials are not yet set in .env
     req.user.wallet = round2(req.user.wallet + amount);
-    addTransaction(req.user.id, 'recharge', amount, `Wallet recharge (Demo) · ${paidNote(bill)}`);
+    addTransaction(req.user.id, 'recharge', amount, 'Wallet recharge (Demo)');
     save();
     emitToUser(req.user.id, 'wallet:update', { balance: req.user.wallet });
-    return res.json({ demo: true, balance: req.user.wallet, ...bill });
+    return res.json({ demo: true, balance: req.user.wallet, amount });
   }
 
   const orderId = `cf_${req.user.id.slice(0, 8)}_${Date.now()}`;
@@ -482,7 +470,7 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
   try {
     const cfOrder = await cashfree.createOrder({
       orderId,
-      orderAmount: bill.total, // the customer pays the recharge plus GST
+      orderAmount: amount,
       customerId: req.user.id,
       customerPhone: req.user.phone,
       customerName: req.user.name,
@@ -497,9 +485,7 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
     const orderRecord = {
       id: orderId,
       userId: req.user.id,
-      amount, // credited to the wallet
-      gst: bill.gst,
-      total: bill.total, // charged by Cashfree
+      amount,
       status: cfOrder.order_status || 'ACTIVE',
       paymentSessionId: cfOrder.payment_session_id,
       gateway: 'cashfree',
@@ -514,8 +500,8 @@ app.post('/wallet/cashfree/order', auth('customer'), async (req, res) => {
       orderId,
       paymentSessionId: cfOrder.payment_session_id,
       paymentLink,
-      orderAmount: bill.total,
-      ...bill,
+      orderAmount: amount,
+      amount,
       mode: cashfree.ENV,
     });
   } catch (err) {
@@ -534,8 +520,8 @@ function creditOrder(orderRecord) {
   orderRecord.processed = true;
   orderRecord.processedAt = db.now();
   user.wallet = round2(user.wallet + orderRecord.amount);
-  // Orders made before GST have no total; they were charged the plain amount.
-  const note = orderRecord.total ? ` · ${paidNote(orderRecord)}` : '';
+  // A few orders were created while GST was charged, with a total above the credited amount.
+  const note = orderRecord.total ? ` · paid ₹${orderRecord.total} incl. ₹${orderRecord.gst} GST` : '';
   addTransaction(user.id, 'recharge', orderRecord.amount, `Wallet recharge (Cashfree)${note}`);
   save();
   emitToUser(user.id, 'wallet:update', { balance: user.wallet });
